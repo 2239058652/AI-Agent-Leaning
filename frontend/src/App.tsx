@@ -71,7 +71,7 @@ function App() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [toolMode, setToolMode] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const toolCallsRef = useRef<ToolCall[]>([])
   const toolResultsRef = useRef<ToolResult[]>([])
