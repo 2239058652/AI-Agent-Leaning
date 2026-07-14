@@ -22,19 +22,29 @@ ai-assistant/
     └── application.yaml               ← 配置文件
 ```
 
-## 当前能力（第2阶段）
+## 当前能力（第4阶段）
 
-- `POST /api/chat` — 非流式聊天，一次请求拿到完整回复
+- `POST /api/chat` — 非流式聊天
+- `POST /api/chat/stream` — SSE 流式聊天
+- `POST /api/chat/tool-stream` — SSE 流式 + 工具调用 Agent Loop（最多10轮）
+- 全局异常处理 + 参数校验
+- 4个本地工具：查天气、查日期、计算器、查IP
+- 前端：流式输出 + 工具调用链路 Timeline + 中断 + 重试
+
+## 跳过/待做事项
+
+- [ ] **4.3 敏感操作确认弹窗** — 当前4个工具全部只读，无敏感操作。待阶段3.5加入敏感写操作后补做：后端工具白名单 + confirm_required 标记 + 前端确认弹窗。
+- [ ] **@Transactional** — 无数据库层，暂不需要。待引入 JPA/JDBC 后评估。
+- [ ] **Spring Security** — 阶段7再做。
 
 ## 后续扩展计划
 
-| 阶段 | 新增能力 | 新增文件 |
-|---|---|---|
-| 第2阶段 | SSE 流式输出 | ChatController 新增 stream 端点 |
-| 第3阶段 | Tool Use + Agent Loop | ToolService + 工具定义 |
-| 第4阶段 | MCP Server | MCP 相关配置 |
-| 第5阶段 | 对话历史 + 状态管理 | MessageService + Redis 集成 |
-| 第6阶段 | React 前端 | 前端项目 |
+| 阶段 | 新增能力 |
+|---|---|
+| 第3阶段(3.5) | 工具安全边界：白名单、参数校验、敏感操作待确认 |
+| 第5阶段 | MCP Server（stdio + Streamable HTTP） |
+| 第6阶段 | 框架选型 + 对话历史 + Checkpoint |
+| 第7阶段 | 鉴权与权限边界 |
 
 ## 构建与运行
 

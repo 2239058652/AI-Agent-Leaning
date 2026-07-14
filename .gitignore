@@ -29,4 +29,8 @@ scripts
 .reasonix
 .claude
 .codegraph
-*.yaml
+
+# Java / Maven
+target/
+*.class
+*.jar

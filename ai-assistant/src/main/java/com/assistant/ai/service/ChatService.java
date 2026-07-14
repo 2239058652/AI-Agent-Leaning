@@ -200,8 +200,29 @@ public class ChatService {
                         for (ToolCallInfo tc : toolCalls) {
                             // ★ 执行工具 — 这是本地 Java 代码，不是模型执行的
                             log.info("[执行] 调用工具: {}，参数: {}", tc.name, tc.arguments);
+
+                            // 通知前端：工具调用开始
+                            try {
+                                ObjectNode toolCallEvent = objectMapper.createObjectNode();
+                                toolCallEvent.put("name", tc.name);
+                                toolCallEvent.put("arguments", tc.arguments);
+                                emitter.send(SseEmitter.event().name("tool_call")
+                                        .data(objectMapper.writeValueAsString(toolCallEvent)));
+                            } catch (Exception ignored) {
+                            }
+
                             String result = toolService.execute(tc.name, tc.arguments);
                             log.info("[执行] 工具返回: {}", result);
+
+                            // 通知前端：工具执行结果
+                            try {
+                                ObjectNode toolResultEvent = objectMapper.createObjectNode();
+                                toolResultEvent.put("name", tc.name);
+                                toolResultEvent.put("result", result);
+                                emitter.send(SseEmitter.event().name("tool_result")
+                                        .data(objectMapper.writeValueAsString(toolResultEvent)));
+                            } catch (Exception ignored) {
+                            }
 
                             // ★ 把工具结果加入对话历史
                             // role 必须是 "tool"，tool_call_id 要和模型返回的一致

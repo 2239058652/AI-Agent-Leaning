@@ -385,3 +385,130 @@ body {
   color: var(--text-secondary);
   margin-top: 12px;
 }
+
+/* ========================================================================
+   工具调用链路 Timeline
+   ======================================================================== */
+
+.tool-timeline {
+  margin-bottom: 8px;
+}
+
+.tool-item {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.tool-call {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-icon {
+  font-size: 14px;
+}
+
+.tool-name {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.tool-args {
+  color: var(--text-secondary);
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+
+.tool-result {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.tool-arrow {
+  color: #00b894;
+  flex-shrink: 0;
+}
+
+.tool-result-text {
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* ========================================================================
+   错误状态 + 重试
+   ======================================================================== */
+
+.content.error {
+  background: #2d1b1b;
+  border: 1px solid #5c2a2a;
+  color: #e88;
+}
+
+.retry-area {
+  margin-top: 8px;
+}
+
+.retry-btn {
+  padding: 6px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retry-btn:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+/* ========================================================================
+   停止按钮
+   ======================================================================== */
+
+.stop-btn {
+  width: 40px;
+  height: 40px;
+  background: #e74c3c;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.stop-btn:hover {
+  background: #c0392b;
+  transform: scale(1.05);
+}
+
+.stop-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: white;
+}
+
+.input-wrapper textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
