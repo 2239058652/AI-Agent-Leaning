@@ -6,12 +6,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
 /**
  * 工具执行服务 — 本地执行 AI 调用的工具
- *
+ * <p>
  * 模型说"我要调用 get_weather，参数是北京"
  * → 这个类负责真正执行，返回结果给模型
  */
@@ -21,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 public class ToolService {
 
     private final ObjectMapper objectMapper;
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     /**
      * 执行工具 — 根据工具名分发到对应方法
@@ -30,33 +38,99 @@ public class ToolService {
      * @return 工具执行结果
      */
     public String execute(String toolName, String argsJson) {
-        log.info("执行工具: {}({})", toolName, argsJson);
+        log.info("========== 工具执行开始 ==========");
+        log.info("工具名: {}", toolName);
+        log.info("参数: {}", argsJson);
 
-        return switch (toolName) {
-            case "get_weather" -> executeGetWeather(argsJson);
+        String result = switch (toolName) {
             case "get_current_date" -> executeGetCurrentDate();
             case "calculate" -> executeCalculate(argsJson);
+            case "get_ip" -> executeGetIp();
+            case "get_weather_by_city" -> executeGetWeatherByCity(argsJson);
             default -> "错误: 未知工具 " + toolName;
         };
+
+        log.info("工具执行结果: {}", result);
+        log.info("========== 工具执行结束 ==========");
+        return result;
     }
 
     /**
-     * 查询天气（假数据，实际项目中调真实天气 API）
+     * 查询未来几天的天气-根据city
      */
-    private String executeGetWeather(String argsJson) {
+    private String executeGetWeatherByCity(String argsJson) {
         try {
             JsonNode args = objectMapper.readTree(argsJson);
-            String location = args.path("location").asText("未知城市");
+            String city = args.path("city").asText("济南");
+            Integer days = Math.max(1, Math.min(args.path("days").asInt(1), 16)); // Open-Meteo 免费版最多支持16天
 
-            // 假数据 — 实际项目中这里调和风天气、OpenWeather 等 API
-            return switch (location) {
-                case "北京" -> "天气: 晴, 温度: 28°C, 湿度: 40%, 风力: 3级";
-                case "上海" -> "天气: 多云, 温度: 30°C, 湿度: 65%, 风力: 2级";
-                case "广州" -> "天气: 阵雨, 温度: 32°C, 湿度: 80%, 风力: 4级";
-                default -> "天气: 晴, 温度: 25°C（" + location + "的模拟数据）";
-            };
+            log.info("========== >>> 我的新工具被调用了！city={}, days={} ==========", city, days);
+
+            // 第一步：地理编码，把城市名转成经纬度
+            String geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name="
+                    + URLEncoder.encode(city, StandardCharsets.UTF_8)
+                    + "&count=1&language=zh&format=json";
+            HttpRequest geoRequest = HttpRequest.newBuilder(URI.create(geoUrl)).GET().build();
+            HttpResponse<String> geoResponse = httpClient.send(geoRequest, HttpResponse.BodyHandlers.ofString());
+
+            if (geoResponse.statusCode() != 200) {
+                return "地理编码服务暂时不可用（HTTP " + geoResponse.statusCode() + "）";
+            }
+
+            JsonNode geoResult = objectMapper.readTree(geoResponse.body());
+            JsonNode results = geoResult.path("results");
+            if (!results.isArray() || results.isEmpty()) {
+                return "未找到城市：" + city;
+            }
+            double lat = results.get(0).path("latitude").asDouble();
+            double lon = results.get(0).path("longitude").asDouble();
+
+            // 第二步：查询天气
+            String weatherUrl = "https://api.open-meteo.com/v1/forecast?latitude=" + lat
+                    + "&longitude=" + lon
+                    + "&daily=weather_code,temperature_2m_max,temperature_2m_min"
+                    + "&timezone=Asia%2FShanghai"
+                    + "&forecast_days=" + days;
+            HttpRequest weatherRequest = HttpRequest.newBuilder(URI.create(weatherUrl)).GET().build();
+            HttpResponse<String> weatherResponse = httpClient.send(weatherRequest, HttpResponse.BodyHandlers.ofString());
+            JsonNode weatherResult = objectMapper.readTree(weatherResponse.body());
+            JsonNode daily = weatherResult.path("daily");
+
+            JsonNode dates = daily.path("time");
+            JsonNode codes = daily.path("weather_code");
+            JsonNode tMax = daily.path("temperature_2m_max");
+            JsonNode tMin = daily.path("temperature_2m_min");
+
+            StringBuilder sb = new StringBuilder(city);
+
+            if (days <= 1) {
+                sb.append("今天: ").append(weatherCodeToText(codes.get(0).asInt()))
+                        .append(" ").append(tMin.get(0).asText()).append("~").append(tMax.get(0).asText()).append("°C");
+            } else {
+                sb.append("未来").append(days).append("天: ");
+                for (int i = 0; i < codes.size(); i++) {
+                    sb.append("第").append(i + 1).append("天")
+                            .append(weatherCodeToText(codes.get(i).asInt()))
+                            .append(tMin.get(i).asText()).append("~").append(tMax.get(i).asText()).append("°C");
+                    if (i < codes.size() - 1) sb.append(", ");
+                }
+            }
+            return sb.toString();
         } catch (Exception e) {
-            return "解析参数失败: " + e.getMessage();
+            log.error("获取天气失败", e);
+            return "获取未来几天的天气失败：" + e.getMessage();
+        }
+
+    }
+
+    /**
+     * 查询IP的方法
+     */
+    private String executeGetIp() {
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        } catch (Exception e) {
+            return "IP获取失败: " + e.getMessage();
         }
     }
 
@@ -117,5 +191,22 @@ public class ToolService {
         } catch (Exception e) {
             return "表达式格式错误: " + expr;
         }
+    }
+
+    /**
+     * WMO 天气代码转中文描述（Open-Meteo 用的是 WMO 标准代码表）
+     */
+    private String weatherCodeToText(int code) {
+        return switch (code) {
+            case 0 -> "晴";
+            case 1, 2, 3 -> "多云";
+            case 45, 48 -> "雾";
+            case 51, 53, 55 -> "毛毛雨";
+            case 61, 63, 65 -> "雨";
+            case 71, 73, 75 -> "雪";
+            case 80, 81, 82 -> "阵雨";
+            case 95, 96, 99 -> "雷雨";
+            default -> "未知(" + code + ")";
+        };
     }
 }

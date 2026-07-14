@@ -35,7 +35,7 @@ public class ChatService {
     private final LlmProperties llmProperties;
     private final ObjectMapper objectMapper;
     private final ToolService toolService;
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final ExecutorService executor = Executors.newFixedThreadPool(10);
 
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(120))
@@ -89,18 +89,40 @@ public class ChatService {
     }
 
     private void chatStreamInternal(ChatRequest request, SseEmitter emitter, boolean useTools) {
+        // ★ executor.execute() 的作用：在后台线程执行，主线程立即返回
+        // 为什么？因为 LLM 响应可能要几十秒，如果阻塞主线程，Tomcat 就没法处理其他请求
         executor.execute(() -> {
             try {
-                // 构建对话历史
+                // ================================================================
+                // 第1步：构建对话历史
+                // 对话历史就是一个 List，里面放着所有消息（用户说了什么、模型说了什么、工具结果）
+                // 模型需要看到完整的对话历史才能做决策
+                // ================================================================
                 List<ObjectNode> messages = buildMessageList(request);
+                log.info("========== Agent Loop 开始 ==========");
+                log.info("用户消息: {}", request.getMessage());
+                log.info("对话历史包含 {} 条消息", messages.size());
 
-                // Agent Loop — 最多循环 10 次
+                // ================================================================
+                // 第2步：Agent Loop — 循环调用模型，直到模型给最终回复
+                // 为什么是循环？因为模型可能要先调工具，拿到结果后再回复
+                // 每次循环就是一次"发请求 → 拿响应 → 判断"的过程
+                // ================================================================
                 for (int round = 0; round < 10; round++) {
-                    log.info("Agent Loop 第 {} 轮", round + 1);
+                    log.info("");
+                    log.info("========== 第 {} 轮 ==========", round + 1);
 
-                    // 构建请求体
+                    // ================================================================
+                    // 第3步：构建 JSON 请求体
+                    // 把对话历史 + 工具定义 转成 JSON，准备发给模型
+                    // ================================================================
                     String requestBody = buildRequestBodyFromMessages(messages, true, useTools);
+                    log.info("[请求] 发送 {} 条消息给模型，useTools={}", messages.size(), useTools);
 
+                    // ================================================================
+                    // 第4步：构建 HTTP 请求
+                    // 就是用 Java 代码发一个 POST 请求，和你用 Postman 发请求一样
+                    // ================================================================
                     HttpRequest httpRequest = HttpRequest.newBuilder()
                             .uri(URI.create(llmProperties.getBaseUrl() + "/openai/v1/chat/completions"))
                             .header("Authorization", "Bearer " + llmProperties.getApiKey())
@@ -108,22 +130,47 @@ public class ChatService {
                             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                             .build();
 
+                    // ================================================================
+                    // 第5步：发送请求，拿到响应
+                    // BodyHandlers.ofInputStream() 表示用"流"的方式接收响应
+                    // 不是等全部返回再给你，而是给你一个管道，你逐行读
+                    // ================================================================
+                    log.info("[请求] 正在发送 HTTP 请求...");
                     HttpResponse<InputStream> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
+                    log.info("[响应] HTTP 状态码: {}", response.statusCode());
 
                     if (response.statusCode() != 200) {
                         String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
-                        log.error("LLM 请求失败: HTTP {} - {}", response.statusCode(), errorBody);
+                        log.error("[错误] LLM 请求失败: {} - {}", response.statusCode(), errorBody);
                         emitter.send(SseEmitter.event().name("error").data("HTTP " + response.statusCode()));
                         emitter.complete();
                         return;
                     }
 
-                    // 读取流式响应，同时收集完整内容
+                    // ================================================================
+                    // 第6步：读取流式响应
+                    // 模型一边生成一边推数据过来，我们逐行读取
+                    // 同时做两件事：
+                    //   a. 把文本内容推给前端（用户能看到打字机效果）
+                    //   b. 收集工具调用信息（如果有）
+                    // ================================================================
                     StringBuilder fullContent = new StringBuilder();
                     List<ToolCallInfo> toolCalls = new ArrayList<>();
                     String finishReason = readStreamResponse(response.body(), emitter, fullContent, toolCalls);
+                    log.info("[响应] finish_reason={}", finishReason);
+                    log.info("[响应] 模型回复内容: {}", fullContent);
+                    if (!toolCalls.isEmpty()) {
+                        log.info("[响应] 模型要求调用 {} 个工具:", toolCalls.size());
+                        for (ToolCallInfo tc : toolCalls) {
+                            log.info("  → {}({})", tc.name, tc.arguments);
+                        }
+                    }
 
-                    // 把 assistant 的回复加入对话历史
+                    // ================================================================
+                    // 第7步：把模型的回复加入对话历史
+                    // 不管模型是给最终回复还是调工具，都要记录到对话历史里
+                    // 这样下一轮模型才能看到上一轮发生了什么
+                    // ================================================================
                     ObjectNode assistantMsg = objectMapper.createObjectNode();
                     assistantMsg.put("role", "assistant");
                     assistantMsg.put("content", fullContent.toString());
@@ -138,32 +185,51 @@ public class ChatService {
                         }
                     }
                     messages.add(assistantMsg);
+                    log.info("[历史] 对话历史现在有 {} 条消息", messages.size());
 
-                    // 判断是否需要调用工具
+                    // ================================================================
+                    // 第8步：判断模型要做什么
+                    // finish_reason 有两种关键值：
+                    //   "tool_calls" → 模型要调工具，不是给最终回复
+                    //   "stop"       → 模型给了最终回复，结束循环
+                    // ================================================================
                     if ("tool_calls".equals(finishReason) && !toolCalls.isEmpty()) {
-                        // 执行每个工具，把结果加入对话历史
-                        for (ToolCallInfo tc : toolCalls) {
-                            String result = toolService.execute(tc.name, tc.arguments);
-                            log.info("工具 {} 结果: {}", tc.name, result);
+                        // ---- 模型要调工具 ----
+                        log.info("[决策] 模型要求调工具，开始执行...");
 
+                        for (ToolCallInfo tc : toolCalls) {
+                            // ★ 执行工具 — 这是本地 Java 代码，不是模型执行的
+                            log.info("[执行] 调用工具: {}，参数: {}", tc.name, tc.arguments);
+                            String result = toolService.execute(tc.name, tc.arguments);
+                            log.info("[执行] 工具返回: {}", result);
+
+                            // ★ 把工具结果加入对话历史
+                            // role 必须是 "tool"，tool_call_id 要和模型返回的一致
                             ObjectNode toolMsg = objectMapper.createObjectNode();
                             toolMsg.put("role", "tool");
                             toolMsg.put("tool_call_id", tc.id);
                             toolMsg.put("content", result);
                             messages.add(toolMsg);
                         }
-                        // 继续下一轮，让模型根据工具结果生成回复
+
+                        log.info("[历史] 对话历史现在有 {} 条消息（含工具结果）", messages.size());
+                        log.info("[决策] 继续下一轮，把工具结果告诉模型...");
+                        // ★ continue = 回到 for 循环顶部，执行第2轮
+                        // 模型看到工具结果后，会决定是继续调工具还是给最终回复
                         continue;
                     }
 
-                    // finish_reason 是 stop，模型给了最终回复，结束
+                    // ---- 模型给了最终回复 ----
+                    log.info("========== Agent Loop 结束 ==========");
+                    log.info("模型最终回复: {}", fullContent);
                     emitter.send(SseEmitter.event().name("done").data("[DONE]"));
                     emitter.complete();
-                    log.info("Agent Loop 完成，共 {} 轮", round + 1);
+                    // ★ return = 退出方法，不再循环
                     return;
                 }
 
-                // 循环次数用完
+                // 循环10次还没结束，强制停止
+                log.warn("Agent Loop 超过最大轮次(10)，强制停止");
                 emitter.send(SseEmitter.event().name("error").data("Agent Loop 超过最大轮次"));
                 emitter.complete();
 
@@ -171,7 +237,8 @@ public class ChatService {
                 log.error("Agent Loop 异常", e);
                 try {
                     emitter.send(SseEmitter.event().name("error").data(e.getMessage()));
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
                 emitter.completeWithError(e);
             }
         });
@@ -252,23 +319,6 @@ public class ChatService {
                   {
                     "type": "function",
                     "function": {
-                      "name": "get_weather",
-                      "description": "查询指定城市的当前天气情况",
-                      "parameters": {
-                        "type": "object",
-                        "properties": {
-                          "location": {
-                            "type": "string",
-                            "description": "城市名称，如'北京'、'上海'"
-                          }
-                        },
-                        "required": ["location"]
-                      }
-                    }
-                  },
-                  {
-                    "type": "function",
-                    "function": {
                       "name": "get_current_date",
                       "description": "获取当前日期和星期几",
                       "parameters": {
@@ -294,6 +344,39 @@ public class ChatService {
                         "required": ["expression"]
                       }
                     }
+                  },
+                  {
+                    "type": "function",
+                    "function": {
+                      "name": "get_ip",
+                      "description": "获取本机IP地址",
+                      "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                      }
+                    }
+                  },
+                  {
+                    "type": "function",
+                    "function": {
+                      "name": "get_weather_by_city",
+                      "description": "查询指定城市未来几天的天气情况，支持输入天数查具体的未来几天的天气",
+                      "parameters": {
+                        "type": "object",
+                        "properties": {
+                          "city": {
+                            "type": "string",
+                            "description": "城市名称，如'北京'、'上海'"
+                          },
+                          "days": {
+                            "type": "integer",
+                            "description": "未来几天，如1、2、3"
+                          }
+                        },
+                        "required": ["city"]
+                      }
+                    }
                   }
                 ]
                 """;
@@ -310,7 +393,7 @@ public class ChatService {
      * @return finish_reason
      */
     private String readStreamResponse(InputStream responseBody, SseEmitter emitter,
-                                       StringBuilder fullContent, List<ToolCallInfo> toolCalls) throws Exception {
+                                      StringBuilder fullContent, List<ToolCallInfo> toolCalls) throws Exception {
         String finishReason = "stop";
 
         try (BufferedReader reader = new BufferedReader(

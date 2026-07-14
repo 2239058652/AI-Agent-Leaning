@@ -5,7 +5,11 @@ import com.assistant.ai.dto.ChatResponse;
 import com.assistant.ai.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
@@ -19,7 +23,7 @@ public class ChatController {
      * 非流式聊天 — 一次性返回完整回复
      */
     @PostMapping("/chat")
-    public ChatResponse chat(@RequestBody ChatRequest request) {
+    public ChatResponse chat(@Valid @RequestBody ChatRequest request) {
         return chatService.chat(request);
     }
 
@@ -35,7 +39,6 @@ public class ChatController {
 
     /**
      * 流式聊天 — 带工具 Agent Loop
-     *
      * 模型可以调用本地工具（天气、日期、计算器），执行后把结果告诉模型，模型再生成回复。
      */
     @PostMapping(value = "/chat/tool-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
