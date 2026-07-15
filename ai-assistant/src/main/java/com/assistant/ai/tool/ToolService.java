@@ -21,6 +21,11 @@ import java.time.format.DateTimeFormatter;
  * <p>
  * 模型说"我要调用 get_weather，参数是北京"
  * → 这个类负责真正执行，返回结果给模型
+ * <p>
+ * 安全机制：
+ * 1. 白名单 — 只允许 Registry 中注册的工具执行
+ * 2. 参数校验 — 执行前校验必填参数和类型
+ * 3. 敏感操作 — sensitive=true 的工具会被拒绝（当前无敏感工具）
  */
 @Slf4j
 @Service
@@ -28,10 +33,12 @@ import java.time.format.DateTimeFormatter;
 public class ToolService {
 
     private final ObjectMapper objectMapper;
+    private final ToolRegistry toolRegistry;
+    private final ToolValidator toolValidator;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     /**
-     * 执行工具 — 根据工具名分发到对应方法
+     * 执行工具 — 校验 + 分发
      *
      * @param toolName 工具名称
      * @param argsJson 参数 JSON 字符串
@@ -42,6 +49,30 @@ public class ToolService {
         log.info("工具名: {}", toolName);
         log.info("参数: {}", argsJson);
 
+        // ---- 安全校验 ----
+
+        // 1. 白名单检查
+        if (!toolRegistry.isAllowed(toolName)) {
+            log.warn("工具不在白名单中: {}", toolName);
+            return "错误: 未知工具 " + toolName;
+        }
+
+        ToolDefinition toolDef = toolRegistry.getTool(toolName).orElseThrow();
+
+        // 2. 敏感操作检查（当前无敏感工具，预留机制）
+        if (toolDef.isSensitive()) {
+            log.warn("敏感操作需要确认: {}", toolName);
+            return "错误: 敏感操作 " + toolName + " 需要用户确认后才能执行";
+        }
+
+        // 3. 参数校验
+        ToolValidator.ValidationResult validation = toolValidator.validate(toolDef, argsJson);
+        if (!validation.success()) {
+            log.warn("参数校验失败: {}", validation.errors());
+            return "错误: 参数校验失败 — " + String.join("; ", validation.errors());
+        }
+
+        // ---- 执行工具 ----
         String result = switch (toolName) {
             case "get_current_date" -> executeGetCurrentDate();
             case "calculate" -> executeCalculate(argsJson);

@@ -1,6 +1,8 @@
 package com.assistant.ai;
 
+import com.assistant.ai.tool.ToolRegistry;
 import com.assistant.ai.tool.ToolService;
+import com.assistant.ai.tool.ToolValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * 工具执行测试 — 验证 ToolService 的各个工具能正常工作
  * <p>
  * 这是纯单元测试，不启动 Spring 容器。
- * ToolService 依赖 ObjectMapper，手动 new 一个就行。
+ * ToolService 的三个依赖都手动创建。
  */
 class ToolServiceTest {
 
@@ -19,7 +21,11 @@ class ToolServiceTest {
 
     @BeforeEach
     void setUp() {
-        toolService = new ToolService(new ObjectMapper());
+        ObjectMapper objectMapper = new ObjectMapper();
+        ToolRegistry registry = new ToolRegistry(objectMapper);
+        registry.init();
+        ToolValidator validator = new ToolValidator();
+        toolService = new ToolService(objectMapper, registry, validator);
     }
 
     @Test

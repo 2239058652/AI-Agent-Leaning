@@ -3,6 +3,7 @@ package com.assistant.ai.service;
 import com.assistant.ai.config.LlmProperties;
 import com.assistant.ai.dto.ChatRequest;
 import com.assistant.ai.dto.ChatResponse;
+import com.assistant.ai.tool.ToolRegistry;
 import com.assistant.ai.tool.ToolService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,6 +36,7 @@ public class ChatService {
     private final LlmProperties llmProperties;
     private final ObjectMapper objectMapper;
     private final ToolService toolService;
+    private final ToolRegistry toolRegistry;
     private final ExecutorService executor = Executors.newFixedThreadPool(10);
 
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -333,75 +335,10 @@ public class ChatService {
 
     /**
      * 构建工具定义数组 — 告诉模型有哪些工具可用
+     * 现在从 ToolRegistry 统一获取，不再硬编码 JSON
      */
-    private ArrayNode buildToolsArray() throws Exception {
-        String toolsJson = """
-                [
-                  {
-                    "type": "function",
-                    "function": {
-                      "name": "get_current_date",
-                      "description": "获取当前日期和星期几",
-                      "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                      }
-                    }
-                  },
-                  {
-                    "type": "function",
-                    "function": {
-                      "name": "calculate",
-                      "description": "计算数学表达式，支持加减乘除",
-                      "parameters": {
-                        "type": "object",
-                        "properties": {
-                          "expression": {
-                            "type": "string",
-                            "description": "数学表达式，如 '2+3*4'"
-                          }
-                        },
-                        "required": ["expression"]
-                      }
-                    }
-                  },
-                  {
-                    "type": "function",
-                    "function": {
-                      "name": "get_ip",
-                      "description": "获取本机IP地址",
-                      "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                      }
-                    }
-                  },
-                  {
-                    "type": "function",
-                    "function": {
-                      "name": "get_weather_by_city",
-                      "description": "查询指定城市未来几天的天气情况，支持输入天数查具体的未来几天的天气",
-                      "parameters": {
-                        "type": "object",
-                        "properties": {
-                          "city": {
-                            "type": "string",
-                            "description": "城市名称，如'北京'、'上海'"
-                          },
-                          "days": {
-                            "type": "integer",
-                            "description": "未来几天，如1、2、3"
-                          }
-                        },
-                        "required": ["city"]
-                      }
-                    }
-                  }
-                ]
-                """;
-        return (ArrayNode) objectMapper.readTree(toolsJson);
+    private ArrayNode buildToolsArray() {
+        return toolRegistry.buildToolsJson();
     }
 
     // ========================================================================
