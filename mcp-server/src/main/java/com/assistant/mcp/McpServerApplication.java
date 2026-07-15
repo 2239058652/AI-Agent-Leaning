@@ -2,6 +2,7 @@ package com.assistant.mcp;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext;
 
 /**
  * MCP Server Spring Boot 启动类
@@ -13,6 +14,18 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class McpServerApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(McpServerApplication.class, args);
+        var context = SpringApplication.run(McpServerApplication.class, args);
+        int port = ((ServletWebServerApplicationContext) context).getWebServer().getPort();
+        System.out.println("""
+
+                ╔═════════════════════════════════════════════════════════════╗
+                ║                                                             ║
+                ║   🔌 MCP Server Started Successfully!                        ║
+                ║                                                             ║
+                ║   🌐 Endpoint:  http://localhost:%d/mcp                     ║
+                ║   🔧 Tool:      get_weather                                 ║
+                ║                                                             ║
+                ╚═════════════════════════════════════════════════════════════╝
+                """.formatted(port));
     }
 }
