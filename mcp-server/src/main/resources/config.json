@@ -1,0 +1,15 @@
+{
+  "app": {
+    "name": "AI Assistant MCP Server",
+    "version": "1.0.0"
+  },
+  "weather": {
+    "defaultCity": "北京",
+    "maxDays": 16,
+    "apiBase": "https://api.open-meteo.com/v1"
+  },
+  "features": {
+    "tools": ["get_weather"],
+    "resources": ["config"]
+  }
+}

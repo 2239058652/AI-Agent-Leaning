@@ -13,5 +13,6 @@
 
     <modules>
         <module>ai-assistant</module>
+        <module>mcp-server</module>
     </modules>
 </project>
