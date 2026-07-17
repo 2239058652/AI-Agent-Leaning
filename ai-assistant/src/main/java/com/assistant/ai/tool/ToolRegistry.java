@@ -1,9 +1,11 @@
 package com.assistant.ai.tool;
 
+import com.assistant.ai.mcp.McpClientService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,7 @@ import java.util.Optional;
 public class ToolRegistry {
 
     private final ObjectMapper objectMapper;
+    private final McpClientService mcpClientService;
     private final Map<String, ToolDefinition> tools = new LinkedHashMap<>();
 
     @PostConstruct
@@ -74,26 +77,8 @@ public class ToolRegistry {
                         """))
                 .build());
 
-        register(ToolDefinition.builder()
-                .name("get_weather_by_city")
-                .description("查询指定城市未来几天的天气情况，支持输入天数查具体的未来几天的天气")
-                .parameters(parseSchema("""
-                        {
-                          "type": "object",
-                          "properties": {
-                            "city": {
-                              "type": "string",
-                              "description": "城市名称，如'北京'、'上海'"
-                            },
-                            "days": {
-                              "type": "integer",
-                              "description": "未来几天，如1、2、3"
-                            }
-                          },
-                          "required": ["city"]
-                        }
-                        """))
-                .build());
+        // 注册 MCP 工具（从远程 MCP Server 发现）
+        registerMcpTools();
 
         log.info("工具注册表初始化完成，注册了 {} 个工具: {}", tools.size(), tools.keySet());
     }
@@ -155,6 +140,36 @@ public class ToolRegistry {
         }
 
         return toolsArray;
+    }
+
+    /**
+     * 从 MCP Server 注册远程工具
+     *
+     * 将 MCP 工具转为本地 ToolDefinition，这样模型看到的工具列表里
+     * 既有本地工具也有远程工具，执行时由 ToolService 根据 source 字段路由。
+     */
+    private void registerMcpTools() {
+        if (!mcpClientService.isAvailable()) {
+            log.info("MCP 客户端不可用，跳过 MCP 工具注册");
+            return;
+        }
+
+        List<McpSchema.Tool> mcpTools = mcpClientService.listTools();
+        for (McpSchema.Tool mcpTool : mcpTools) {
+            // 将 MCP 的 inputSchema 转为 Jackson JsonNode
+            JsonNode parameters = objectMapper.valueToTree(mcpTool.inputSchema());
+
+            ToolDefinition definition = ToolDefinition.builder()
+                    .name(mcpTool.name())
+                    .description(mcpTool.description() != null ? mcpTool.description() : "")
+                    .parameters(parameters)
+                    .source(ToolDefinition.ToolSource.MCP)
+                    .mcpServer("mcp-server")
+                    .build();
+
+            register(definition);
+            log.info("注册 MCP 工具: {}", mcpTool.name());
+        }
     }
 
     private JsonNode parseSchema(String json) {

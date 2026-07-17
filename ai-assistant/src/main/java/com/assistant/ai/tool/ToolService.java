@@ -1,5 +1,7 @@
 package com.assistant.ai.tool;
 
+import com.assistant.ai.mcp.McpClientService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 
 /**
  * 工具执行服务 — 本地执行 AI 调用的工具
@@ -35,6 +38,7 @@ public class ToolService {
     private final ObjectMapper objectMapper;
     private final ToolRegistry toolRegistry;
     private final ToolValidator toolValidator;
+    private final McpClientService mcpClientService;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     /**
@@ -73,13 +77,19 @@ public class ToolService {
         }
 
         // ---- 执行工具 ----
-        String result = switch (toolName) {
-            case "get_current_date" -> executeGetCurrentDate();
-            case "calculate" -> executeCalculate(argsJson);
-            case "get_ip" -> executeGetIp();
-            case "get_weather_by_city" -> executeGetWeatherByCity(argsJson);
-            default -> "错误: 未知工具 " + toolName;
-        };
+        String result;
+
+        // 根据工具来源路由：MCP 工具走远程调用，本地工具走 switch
+        if (toolDef.getSource() == ToolDefinition.ToolSource.MCP) {
+            result = executeMcpTool(toolName, argsJson);
+        } else {
+            result = switch (toolName) {
+                case "get_current_date" -> executeGetCurrentDate();
+                case "calculate" -> executeCalculate(argsJson);
+                case "get_ip" -> executeGetIp();
+                default -> "错误: 未知本地工具 " + toolName;
+            };
+        }
 
         log.info("工具执行结果: {}", result);
         log.info("========== 工具执行结束 ==========");
@@ -152,6 +162,24 @@ public class ToolService {
             return "获取未来几天的天气失败：" + e.getMessage();
         }
 
+    }
+
+    /**
+     * 执行 MCP 工具 — 通过 MCP 协议调用远程服务
+     *
+     * 将 argsJson（字符串）转为 Map，传给 McpClientService.callTool()。
+     * MCP SDK 的 callTool 接受 Map<String, Object> 参数。
+     */
+    private String executeMcpTool(String toolName, String argsJson) {
+        try {
+            // 将 JSON 字符串转为 Map
+            Map<String, Object> args = objectMapper.readValue(argsJson,
+                    new TypeReference<Map<String, Object>>() {});
+            return mcpClientService.callTool(toolName, args);
+        } catch (Exception e) {
+            log.error("MCP 工具参数解析失败: {}", toolName, e);
+            return "错误: MCP 工具参数解析失败 — " + e.getMessage();
+        }
     }
 
     /**

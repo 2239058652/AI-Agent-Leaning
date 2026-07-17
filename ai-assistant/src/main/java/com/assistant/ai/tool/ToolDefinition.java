@@ -31,4 +31,28 @@ public class ToolDefinition {
      */
     @Builder.Default
     private boolean sensitive = false;
+
+    /**
+     * 工具来源 — 决定由谁执行
+     * LOCAL: 本地 Java 代码执行
+     * MCP:   通过 MCP 协议调用远程服务
+     */
+    @Builder.Default
+    private ToolSource source = ToolSource.LOCAL;
+
+    /**
+     * MCP Server 名称（仅 source=MCP 时有值）
+     * 预留字段，未来支持多个 MCP Server 时用来区分来源
+     */
+    private String mcpServer;
+
+    /**
+     * 工具来源枚举
+     */
+    public enum ToolSource {
+        /** 本地工具 — 在本进程内执行 */
+        LOCAL,
+        /** MCP 工具 — 通过 MCP 协议调用远程服务 */
+        MCP
+    }
 }

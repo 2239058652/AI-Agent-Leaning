@@ -7,3 +7,9 @@ llm:
   base-url: https://api.longcat.chat
   model: LongCat-2.0
   timeout: 60
+
+# MCP 客户端配置
+mcp:
+  server:
+    url: http://localhost:3190/mcp
+    enabled: true

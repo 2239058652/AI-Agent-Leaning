@@ -1,17 +1,19 @@
 package com.assistant.mcp;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
+import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
+import io.modelcontextprotocol.spec.McpSchema;
+import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 
 /**
  * MCP Server 配置
@@ -37,11 +39,29 @@ public class McpConfig {
     }
 
     @Bean
-    public io.modelcontextprotocol.server.McpSyncServer mcpServer(
-            HttpServletStreamableServerTransportProvider transportProvider) {
+    public McpSyncServer mcpServer(HttpServletStreamableServerTransportProvider transportProvider) {
+        var objectMapper = new ObjectMapper();
 
-        // 参数 schema
-        var inputSchema = new io.modelcontextprotocol.spec.McpSchema.JsonSchema(
+        return McpServer.sync(transportProvider)
+                .serverInfo("weather-mcp-server", "1.0.0")
+                .capabilities(McpSchema.ServerCapabilities.builder()
+                        .tools(true)
+                        .build())
+                .toolCall(weatherTool(), (exchange, request) -> {
+                    String argsJson = toJson(objectMapper, request.arguments());
+                    String result = WeatherTool.execute(argsJson);
+                    return CallToolResult.builder()
+                            .addTextContent(result)
+                            .build();
+                })
+                .build();
+    }
+
+    /**
+     * 天气工具定义
+     */
+    private McpSchema.Tool weatherTool() {
+        var inputSchema = new McpSchema.JsonSchema(
                 "object",
                 Map.of(
                         "city", Map.of("type", "string", "description", "城市名称"),
@@ -51,43 +71,21 @@ public class McpConfig {
                 false, null, null
         );
 
-        // 工具定义
-        var weatherTool = new io.modelcontextprotocol.spec.McpSchema.Tool(
+        return new McpSchema.Tool(
                 "get_weather",
                 "get_weather",
                 "查询指定城市未来几天的天气情况",
                 inputSchema,
                 null, null, null
         );
+    }
 
-        return McpServer.sync(transportProvider)
-                .serverInfo("weather-mcp-server", "1.0.0")
-                .capabilities(io.modelcontextprotocol.spec.McpSchema.ServerCapabilities.builder()
-                        .tools(true)
-                        .build())
-                .tool(weatherTool, (exchange, args) -> {
-                    // 手动构建 JSON，避免编码问题
-                    StringBuilder sb = new StringBuilder("{");
-                    boolean first = true;
-                    for (var entry : args.entrySet()) {
-                        if (!first) sb.append(",");
-                        sb.append("\"").append(entry.getKey()).append("\":");
-                        if (entry.getValue() instanceof String s) {
-                            sb.append("\"").append(s).append("\"");
-                        } else {
-                            sb.append(entry.getValue());
-                        }
-                        first = false;
-                    }
-                    sb.append("}");
-
-                    String result = WeatherTool.execute(sb.toString());
-                    return new io.modelcontextprotocol.spec.McpSchema.CallToolResult(
-                            List.of(new io.modelcontextprotocol.spec.McpSchema.TextContent(result)),
-                            false
-                    );
-                })
-                .build();
+    private String toJson(ObjectMapper objectMapper, Map<String, Object> args) {
+        try {
+            return objectMapper.writeValueAsString(args);
+        } catch (JsonProcessingException e) {
+            return "{}";
+        }
     }
 
     /**
