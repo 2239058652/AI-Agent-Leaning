@@ -1,6 +1,21 @@
 server:
   port: 3180
 
+# 数据库配置
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/ai_assistant?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: Dingtong1998
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# MyBatis 配置
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.assistant.ai.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
 # LLM API 配置
 llm:
   api-key: ak_2Qm1uM3PN6ug9X23Iy1TO24F6bz2q

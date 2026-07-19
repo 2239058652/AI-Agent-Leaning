@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.assistant.ai.mapper.OrderMapper">
+
+    <!-- 查询订单列表 -->
+    <select id="listOrders" resultType="com.assistant.ai.entity.Order">
+        SELECT id, order_no, product_name, amount, status, created_at, updated_at
+        FROM orders
+        <where>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 根据订单号查询 -->
+    <select id="getByOrderNo" resultType="com.assistant.ai.entity.Order">
+        SELECT id, order_no, product_name, amount, status, created_at, updated_at
+        FROM orders
+        WHERE order_no = #{orderNo}
+    </select>
+
+    <!-- 更新订单状态 -->
+    <update id="updateStatus">
+        UPDATE orders
+        SET status = #{status}
+        WHERE order_no = #{orderNo}
+    </update>
+
+    <!-- 今日统计 -->
+    <select id="todayStats" resultType="com.assistant.ai.entity.OrderStats">
+        SELECT COUNT(*)                                         AS order_count,
+               COALESCE(SUM(IF(status = 'PAID', amount, 0)), 0) AS paid_amount,
+               COALESCE(SUM(IF(status = 'PAID', 1, 0)), 0)      AS paid_count
+        FROM orders
+        WHERE DATE(created_at) = CURDATE()
+    </select>
+
+</mapper>

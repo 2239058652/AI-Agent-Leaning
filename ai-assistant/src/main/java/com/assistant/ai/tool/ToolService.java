@@ -1,6 +1,7 @@
 package com.assistant.ai.tool;
 
 import com.assistant.ai.mcp.McpClientService;
+import com.assistant.ai.service.OrderService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,26 +10,26 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.net.InetAddress;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 /**
- * 工具执行服务 — 本地执行 AI 调用的工具
+ * 工具执行服务 — 执行 AI 调用的工具
  * <p>
  * 模型说"我要调用 get_weather，参数是北京"
  * → 这个类负责真正执行，返回结果给模型
  * <p>
+ * 执行路由：
+ * - LOCAL 工具：本地 Java 方法执行
+ *   - 基础工具：get_current_date、calculate、get_ip
+ *   - 业务工具：query_orders、analyze_orders、cancel_order
+ * - MCP 工具：通过 MCP 协议调用远程服务（get_weather → mcp-server）
+ * <p>
  * 安全机制：
  * 1. 白名单 — 只允许 Registry 中注册的工具执行
  * 2. 参数校验 — 执行前校验必填参数和类型
- * 3. 敏感操作 — sensitive=true 的工具会被拒绝（当前无敏感工具）
+ * 3. 敏感操作 — sensitive=true 的工具会被拒绝，需要走确认流程
  */
 @Slf4j
 @Service
@@ -39,7 +40,7 @@ public class ToolService {
     private final ToolRegistry toolRegistry;
     private final ToolValidator toolValidator;
     private final McpClientService mcpClientService;
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final OrderService orderService;
 
     /**
      * 执行工具 — 校验 + 分发
@@ -87,6 +88,9 @@ public class ToolService {
                 case "get_current_date" -> executeGetCurrentDate();
                 case "calculate" -> executeCalculate(argsJson);
                 case "get_ip" -> executeGetIp();
+                case "query_orders" -> executeQueryOrders(argsJson);
+                case "analyze_orders" -> executeAnalyzeOrders();
+                case "cancel_order" -> executeCancelOrder(argsJson);
                 default -> "错误: 未知本地工具 " + toolName;
             };
         }
@@ -94,74 +98,6 @@ public class ToolService {
         log.info("工具执行结果: {}", result);
         log.info("========== 工具执行结束 ==========");
         return result;
-    }
-
-    /**
-     * 查询未来几天的天气-根据city
-     */
-    private String executeGetWeatherByCity(String argsJson) {
-        try {
-            JsonNode args = objectMapper.readTree(argsJson);
-            String city = args.path("city").asText("济南");
-            Integer days = Math.max(1, Math.min(args.path("days").asInt(1), 16)); // Open-Meteo 免费版最多支持16天
-
-            log.info("========== >>> 我的新工具被调用了！city={}, days={} ==========", city, days);
-
-            // 第一步：地理编码，把城市名转成经纬度
-            String geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name="
-                    + URLEncoder.encode(city, StandardCharsets.UTF_8)
-                    + "&count=1&language=zh&format=json";
-            HttpRequest geoRequest = HttpRequest.newBuilder(URI.create(geoUrl)).GET().build();
-            HttpResponse<String> geoResponse = httpClient.send(geoRequest, HttpResponse.BodyHandlers.ofString());
-
-            if (geoResponse.statusCode() != 200) {
-                return "地理编码服务暂时不可用（HTTP " + geoResponse.statusCode() + "）";
-            }
-
-            JsonNode geoResult = objectMapper.readTree(geoResponse.body());
-            JsonNode results = geoResult.path("results");
-            if (!results.isArray() || results.isEmpty()) {
-                return "未找到城市：" + city;
-            }
-            double lat = results.get(0).path("latitude").asDouble();
-            double lon = results.get(0).path("longitude").asDouble();
-
-            // 第二步：查询天气
-            String weatherUrl = "https://api.open-meteo.com/v1/forecast?latitude=" + lat
-                    + "&longitude=" + lon
-                    + "&daily=weather_code,temperature_2m_max,temperature_2m_min"
-                    + "&timezone=Asia%2FShanghai"
-                    + "&forecast_days=" + days;
-            HttpRequest weatherRequest = HttpRequest.newBuilder(URI.create(weatherUrl)).GET().build();
-            HttpResponse<String> weatherResponse = httpClient.send(weatherRequest, HttpResponse.BodyHandlers.ofString());
-            JsonNode weatherResult = objectMapper.readTree(weatherResponse.body());
-            JsonNode daily = weatherResult.path("daily");
-
-            JsonNode dates = daily.path("time");
-            JsonNode codes = daily.path("weather_code");
-            JsonNode tMax = daily.path("temperature_2m_max");
-            JsonNode tMin = daily.path("temperature_2m_min");
-
-            StringBuilder sb = new StringBuilder(city);
-
-            if (days <= 1) {
-                sb.append("今天: ").append(weatherCodeToText(codes.get(0).asInt()))
-                        .append(" ").append(tMin.get(0).asText()).append("~").append(tMax.get(0).asText()).append("°C");
-            } else {
-                sb.append("未来").append(days).append("天: ");
-                for (int i = 0; i < codes.size(); i++) {
-                    sb.append("第").append(i + 1).append("天")
-                            .append(weatherCodeToText(codes.get(i).asInt()))
-                            .append(tMin.get(i).asText()).append("~").append(tMax.get(i).asText()).append("°C");
-                    if (i < codes.size() - 1) sb.append(", ");
-                }
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            log.error("获取天气失败", e);
-            return "获取未来几天的天气失败：" + e.getMessage();
-        }
-
     }
 
     /**
@@ -201,6 +137,68 @@ public class ToolService {
         String[] weekdays = {"", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"};
         return "今天是 " + today.format(DateTimeFormatter.ofPattern("yyyy年MM月dd日"))
                 + " " + weekdays[today.getDayOfWeek().getValue()];
+    }
+
+    // ========================================================================
+    // 业务工具：订单管理
+    // ========================================================================
+
+    /**
+     * 查询订单列表
+     */
+    private String executeQueryOrders(String argsJson) {
+        try {
+            JsonNode args = objectMapper.readTree(argsJson);
+            String status = args.path("status").asText(null);
+            var orders = orderService.queryOrders(status);
+
+            if (orders.isEmpty()) {
+                return status == null ? "暂无订单" : "没有状态为 " + status + " 的订单";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("共 ").append(orders.size()).append(" 个订单：\n");
+            for (var order : orders) {
+                sb.append("• ").append(order.getOrderNo())
+                        .append(" | ").append(order.getProductName())
+                        .append(" | ¥").append(order.getAmount())
+                        .append(" | ").append(order.getStatus())
+                        .append("\n");
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "查询订单失败: " + e.getMessage();
+        }
+    }
+
+    /**
+     * 今日订单统计
+     */
+    private String executeAnalyzeOrders() {
+        try {
+            var stats = orderService.todayStats();
+            return String.format("今日订单统计：总订单 %d 单，已支付 %d 单，成交额 ¥%s",
+                    stats.getOrderCount(), stats.getPaidCount(), stats.getPaidAmount());
+        } catch (Exception e) {
+            return "统计失败: " + e.getMessage();
+        }
+    }
+
+    /**
+     * 取消订单 — 敏感写操作
+     *
+     * 注意：这个方法在正常流程中不会被调用，
+     * 因为 execute() 方法在检测到 sensitive=true 时会直接拒绝。
+     * 敏感操作需要走确认流程（前端弹窗 → 用户确认 → 后端执行）。
+     */
+    private String executeCancelOrder(String argsJson) {
+        try {
+            JsonNode args = objectMapper.readTree(argsJson);
+            String orderNo = args.path("order_no").asText("");
+            return orderService.cancelOrder(orderNo);
+        } catch (Exception e) {
+            return "取消订单失败: " + e.getMessage();
+        }
     }
 
     /**
@@ -250,22 +248,5 @@ public class ToolService {
         } catch (Exception e) {
             return "表达式格式错误: " + expr;
         }
-    }
-
-    /**
-     * WMO 天气代码转中文描述（Open-Meteo 用的是 WMO 标准代码表）
-     */
-    private String weatherCodeToText(int code) {
-        return switch (code) {
-            case 0 -> "晴";
-            case 1, 2, 3 -> "多云";
-            case 45, 48 -> "雾";
-            case 51, 53, 55 -> "毛毛雨";
-            case 61, 63, 65 -> "雨";
-            case 71, 73, 75 -> "雪";
-            case 80, 81, 82 -> "阵雨";
-            case 95, 96, 99 -> "雷雨";
-            default -> "未知(" + code + ")";
-        };
     }
 }

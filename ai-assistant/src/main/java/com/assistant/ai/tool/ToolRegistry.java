@@ -77,6 +77,55 @@ public class ToolRegistry {
                         """))
                 .build());
 
+        // ---- 业务工具：订单管理 ----
+
+        register(ToolDefinition.builder()
+                .name("query_orders")
+                .description("查询订单列表。可按状态筛选：PENDING(待支付)、PAID(已支付)、CANCELLED(已取消)。不传状态查全部。")
+                .parameters(parseSchema("""
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "description": "订单状态筛选，可选值：PENDING、PAID、CANCELLED，不传则查全部"
+                            }
+                          },
+                          "required": []
+                        }
+                        """))
+                .build());
+
+        register(ToolDefinition.builder()
+                .name("analyze_orders")
+                .description("统计今日订单数据，包括订单数、成交额、已支付订单数")
+                .parameters(parseSchema("""
+                        {
+                          "type": "object",
+                          "properties": {},
+                          "required": []
+                        }
+                        """))
+                .build());
+
+        register(ToolDefinition.builder()
+                .name("cancel_order")
+                .description("取消订单。只有PENDING(待支付)状态的订单可以取消。取消前请确认用户意图。")
+                .parameters(parseSchema("""
+                        {
+                          "type": "object",
+                          "properties": {
+                            "order_no": {
+                              "type": "string",
+                              "description": "订单号，如 ORD20260717002"
+                            }
+                          },
+                          "required": ["order_no"]
+                        }
+                        """))
+                .sensitive(true)
+                .build());
+
         // 注册 MCP 工具（从远程 MCP Server 发现）
         registerMcpTools();
 

@@ -9,8 +9,8 @@ public class AiAssistantApplication {
     public static void main(String[] args) {
         var context = SpringApplication.run(AiAssistantApplication.class, args);
         int port = ((ServletWebServerApplicationContext) context).getWebServer().getPort();
-        System.out.println("""
-
+        System.out.printf("""
+                
                 ╔═════════════════════════════════════════════════════════════╗
                 ║                                                             ║
                 ║   🤖 AI Assistant Started Successfully!                      ║
@@ -20,6 +20,6 @@ public class AiAssistantApplication {
                 ║   🔧 Tool:      http://localhost:%d/api/chat/tool-stream     ║
                 ║                                                             ║
                 ╚═════════════════════════════════════════════════════════════╝
-                """.formatted(port, port, port));
+                %n""", port, port, port);
     }
 }
