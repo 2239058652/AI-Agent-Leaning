@@ -47,4 +47,17 @@ public class ChatController {
         chatService.chatStreamWithTools(request, emitter);
         return emitter;
     }
+
+    /**
+     * 执行已确认的敏感操作
+     *
+     * 当 Agent Loop 遇到敏感操作时会暂停，前端弹窗让用户确认，
+     * 用户确认后调用这个接口执行。
+     */
+    @PostMapping("/chat/execute-confirmed")
+    public ChatResponse executeConfirmed(@RequestBody ConfirmRequest request) {
+        return chatService.executeConfirmed(request.toolName(), request.argsJson());
+    }
+
+    public record ConfirmRequest(String toolName, String argsJson) {}
 }

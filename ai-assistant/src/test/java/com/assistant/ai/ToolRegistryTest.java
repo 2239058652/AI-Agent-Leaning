@@ -1,9 +1,13 @@
 package com.assistant.ai;
 
+import com.assistant.ai.mcp.McpClientService;
 import com.assistant.ai.tool.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,7 +20,9 @@ class ToolRegistryTest {
 
     @BeforeEach
     void setUp() {
-        registry = new ToolRegistry(new ObjectMapper());
+        McpClientService mockMcp = Mockito.mock(McpClientService.class);
+        Mockito.when(mockMcp.listTools()).thenReturn(List.of());
+        registry = new ToolRegistry(new ObjectMapper(), mockMcp);
         registry.init();
     }
 
@@ -25,7 +31,7 @@ class ToolRegistryTest {
         assertTrue(registry.isAllowed("get_current_date"));
         assertTrue(registry.isAllowed("calculate"));
         assertTrue(registry.isAllowed("get_ip"));
-        assertTrue(registry.isAllowed("get_weather_by_city"));
+        assertTrue(registry.isAllowed("query_orders"));
     }
 
     @Test
@@ -51,7 +57,7 @@ class ToolRegistryTest {
     @Test
     void allToolsShouldBeIncludedInJson() {
         var toolsJson = registry.buildToolsJson();
-        assertEquals(4, toolsJson.size());
+        assertEquals(6, toolsJson.size());
 
         // 验证第一个工具的结构
         var first = toolsJson.get(0);
@@ -61,9 +67,14 @@ class ToolRegistryTest {
 
     @Test
     void sensitiveToolShouldBeMarked() {
-        // 当前所有工具都不是敏感的
-        for (var tool : registry.getAllTools()) {
-            assertFalse(tool.isSensitive(), "工具 " + tool.getName() + " 不应该是敏感的");
-        }
+        // cancel_order 是敏感写操作
+        var cancelTool = registry.getTool("cancel_order");
+        assertTrue(cancelTool.isPresent());
+        assertTrue(cancelTool.get().isSensitive(), "cancel_order 应该是敏感操作");
+
+        // 其他工具不应该是敏感的
+        var calculateTool = registry.getTool("calculate");
+        assertTrue(calculateTool.isPresent());
+        assertFalse(calculateTool.get().isSensitive(), "calculate 不应该是敏感操作");
     }
 }

@@ -47,9 +47,9 @@ public class ToolService {
      *
      * @param toolName 工具名称
      * @param argsJson 参数 JSON 字符串
-     * @return 工具执行结果
+     * @return 工具执行结果（可能是正常结果，也可能是需要确认）
      */
-    public String execute(String toolName, String argsJson) {
+    public ToolResult execute(String toolName, String argsJson) {
         log.info("========== 工具执行开始 ==========");
         log.info("工具名: {}", toolName);
         log.info("参数: {}", argsJson);
@@ -59,22 +59,22 @@ public class ToolService {
         // 1. 白名单检查
         if (!toolRegistry.isAllowed(toolName)) {
             log.warn("工具不在白名单中: {}", toolName);
-            return "错误: 未知工具 " + toolName;
+            return ToolResult.success("错误: 未知工具 " + toolName);
         }
 
         ToolDefinition toolDef = toolRegistry.getTool(toolName).orElseThrow();
 
-        // 2. 敏感操作检查（当前无敏感工具，预留机制）
+        // 2. 敏感操作检查 — 返回"需要确认"，不是错误
         if (toolDef.isSensitive()) {
-            log.warn("敏感操作需要确认: {}", toolName);
-            return "错误: 敏感操作 " + toolName + " 需要用户确认后才能执行";
+            log.info("敏感操作需要确认: {}，等待用户确认", toolName);
+            return ToolResult.confirmRequired(toolName, argsJson);
         }
 
         // 3. 参数校验
         ToolValidator.ValidationResult validation = toolValidator.validate(toolDef, argsJson);
         if (!validation.success()) {
             log.warn("参数校验失败: {}", validation.errors());
-            return "错误: 参数校验失败 — " + String.join("; ", validation.errors());
+            return ToolResult.success("错误: 参数校验失败 — " + String.join("; ", validation.errors()));
         }
 
         // ---- 执行工具 ----
@@ -97,7 +97,26 @@ public class ToolService {
 
         log.info("工具执行结果: {}", result);
         log.info("========== 工具执行结束 ==========");
-        return result;
+        return ToolResult.success(result);
+    }
+
+    /**
+     * 执行已确认的敏感操作 — 跳过敏感检查
+     *
+     * 用户在前端确认后，ChatService 调用这个方法执行。
+     * 和 execute() 的区别：不检查 sensitive 标记。
+     */
+    public ToolResult executeConfirmed(String toolName, String argsJson) {
+        log.info("========== 执行已确认的敏感操作 ==========");
+        log.info("工具名: {}，参数: {}", toolName, argsJson);
+
+        String result = switch (toolName) {
+            case "cancel_order" -> executeCancelOrder(argsJson);
+            default -> "错误: 不支持的敏感操作 " + toolName;
+        };
+
+        log.info("已确认操作结果: {}", result);
+        return ToolResult.success(result);
     }
 
     /**

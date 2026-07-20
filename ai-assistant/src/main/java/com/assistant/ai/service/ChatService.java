@@ -4,6 +4,7 @@ import com.assistant.ai.config.LlmProperties;
 import com.assistant.ai.dto.ChatRequest;
 import com.assistant.ai.dto.ChatResponse;
 import com.assistant.ai.tool.ToolRegistry;
+import com.assistant.ai.tool.ToolResult;
 import com.assistant.ai.tool.ToolService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,6 +47,23 @@ public class ChatService {
     // ========================================================================
     // 非流式聊天
     // ========================================================================
+
+    /**
+     * 执行已确认的敏感操作
+     *
+     * 用户在前端确认后，调用此方法执行。
+     * 不走 Agent Loop，直接执行工具并返回结果。
+     */
+    public ChatResponse executeConfirmed(String toolName, String argsJson) {
+        try {
+            log.info("执行已确认的敏感操作: {}({})", toolName, argsJson);
+            ToolResult result = toolService.executeConfirmed(toolName, argsJson);
+            return ChatResponse.ok(result.getResult(), 0, 0);
+        } catch (Exception e) {
+            log.error("执行已确认操作失败", e);
+            return ChatResponse.fail("执行失败: " + e.getMessage());
+        }
+    }
 
     public ChatResponse chat(ChatRequest request) {
         try {
@@ -110,6 +128,7 @@ public class ChatService {
                 // 为什么是循环？因为模型可能要先调工具，拿到结果后再回复
                 // 每次循环就是一次"发请求 → 拿响应 → 判断"的过程
                 // ================================================================
+                boolean waitingForConfirmation = false;
                 for (int round = 0; round < 10; round++) {
                     log.info("");
                     log.info("========== 第 {} 轮 ==========", round + 1);
@@ -199,6 +218,7 @@ public class ChatService {
                         // ---- 模型要调工具 ----
                         log.info("[决策] 模型要求调工具，开始执行...");
 
+                        boolean needsBreak = false;
                         for (ToolCallInfo tc : toolCalls) {
                             // ★ 执行工具 — 这是本地 Java 代码，不是模型执行的
                             log.info("[执行] 调用工具: {}，参数: {}", tc.name, tc.arguments);
@@ -213,7 +233,23 @@ public class ChatService {
                             } catch (Exception ignored) {
                             }
 
-                            String result = toolService.execute(tc.name, tc.arguments);
+                            ToolResult toolResult = toolService.execute(tc.name, tc.arguments);
+
+                            // 敏感操作：通知前端需要确认，暂停 Agent Loop
+                            if (toolResult.isNeedsConfirmation()) {
+                                log.info("[确认] 工具 {} 需要用户确认，暂停 Agent Loop", tc.name);
+                                ObjectNode confirmEvent = objectMapper.createObjectNode();
+                                confirmEvent.put("toolName", toolResult.getToolName());
+                                confirmEvent.put("argsJson", toolResult.getArgsJson());
+                                confirmEvent.put("message", "操作需要确认：取消订单 " + toolResult.getArgsJson());
+                                emitter.send(SseEmitter.event().name("confirmation_required")
+                                        .data(objectMapper.writeValueAsString(confirmEvent)));
+                                waitingForConfirmation = true;
+                                needsBreak = true;
+                                break;
+                            }
+
+                            String result = toolResult.getResult();
                             log.info("[执行] 工具返回: {}", result);
 
                             // 通知前端：工具执行结果
@@ -234,6 +270,7 @@ public class ChatService {
                             toolMsg.put("content", result);
                             messages.add(toolMsg);
                         }
+                        if (needsBreak) break;
 
                         log.info("[历史] 对话历史现在有 {} 条消息（含工具结果）", messages.size());
                         log.info("[决策] 继续下一轮，把工具结果告诉模型...");
@@ -252,9 +289,13 @@ public class ChatService {
                 }
 
                 // 循环10次还没结束，强制停止
-                log.warn("Agent Loop 超过最大轮次(10)，强制停止");
-                emitter.send(SseEmitter.event().name("error").data("Agent Loop 超过最大轮次"));
-                emitter.complete();
+                if (!waitingForConfirmation) {
+                    log.warn("Agent Loop 超过最大轮次(10)，强制停止");
+                    emitter.send(SseEmitter.event().name("error").data("Agent Loop 超过最大轮次"));
+                    emitter.complete();
+                } else {
+                    log.info("Agent Loop 暂停，等待用户确认敏感操作");
+                }
 
             } catch (Exception e) {
                 log.error("Agent Loop 异常", e);

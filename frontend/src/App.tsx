@@ -53,9 +53,13 @@ const TOOL_SUGGESTIONS = [
 
 const TOOL_LABELS: Record<string, string> = {
   get_weather_by_city: '查天气',
+  get_weather: '查天气',
   get_current_date: '查日期',
   calculate: '计算器',
   get_ip: '查IP',
+  query_orders: '查订单',
+  analyze_orders: '订单统计',
+  cancel_order: '取消订单',
 }
 
 function getToolLabel(name: string): string {
@@ -66,11 +70,19 @@ function getToolLabel(name: string): string {
 // 主组件
 // ============================================================================
 
+/** 确认弹窗状态 */
+interface ConfirmState {
+  toolName: string
+  argsJson: string
+  message: string
+}
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [toolMode, setToolMode] = useState(false)
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const toolCallsRef = useRef<ToolCall[]>([])
@@ -188,6 +200,20 @@ function App() {
             continue
           }
 
+          // ---- 敏感操作确认事件 ----
+          if (eventName === 'confirmation_required') {
+            try {
+              const confirm = JSON.parse(eventData)
+              setConfirmState({
+                toolName: confirm.toolName,
+                argsJson: confirm.argsJson,
+                message: confirm.message,
+              })
+            } catch { /* ignore parse error */ }
+            eventName = ''
+            continue
+          }
+
           // ---- 文本内容事件（默认） ----
           // 没有 event 字段时，data 就是文本内容
           if (eventName === '' || eventName === 'chunk') {
@@ -267,6 +293,54 @@ function App() {
       return prev
     })
     sendMessage(lastUserMsg.content)
+  }
+
+  // ========================================================================
+  // 敏感操作确认
+  // ========================================================================
+
+  const handleConfirm = async () => {
+    if (!confirmState) return
+
+    const { toolName, argsJson } = confirmState
+    setConfirmState(null)
+    setLoading(true)
+
+    try {
+      const response = await fetch(`${API_BASE}/api/chat/execute-confirmed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolName, argsJson }),
+      })
+
+      const data = await response.json()
+      const resultText = data.content || '操作完成'
+
+      // 添加确认结果到消息列表
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: resultText,
+        toolCalls: [{ name: toolName, arguments: argsJson }],
+        toolResults: [{ name: toolName, result: resultText }],
+      }])
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error)
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `操作失败: ${errMsg}`,
+        isError: true,
+      }])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancelConfirm = () => {
+    setConfirmState(null)
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: '操作已取消。',
+    }])
   }
 
   // ========================================================================
@@ -431,6 +505,23 @@ function App() {
           </div>
         </div>
       </div>
+
+      {/* 确认弹窗 */}
+      {confirmState && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">⚠️ 敏感操作确认</div>
+            <div className="modal-body">
+              <p>{confirmState.message}</p>
+              <p className="modal-hint">此操作不可撤销，请确认是否执行。</p>
+            </div>
+            <div className="modal-actions">
+              <button className="modal-btn cancel" onClick={handleCancelConfirm}>取消</button>
+              <button className="modal-btn confirm" onClick={handleConfirm}>确认执行</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
