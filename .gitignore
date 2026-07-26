@@ -34,3 +34,4 @@ scripts
 target/
 *.class
 *.jar
+*.yaml

@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -38,6 +39,7 @@ public class ChatService {
     private final ObjectMapper objectMapper;
     private final ToolService toolService;
     private final ToolRegistry toolRegistry;
+    private final ChatClient.Builder chatClientBuilder;
     private final ExecutorService executor = Executors.newFixedThreadPool(10);
 
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -50,7 +52,7 @@ public class ChatService {
 
     /**
      * 执行已确认的敏感操作
-     *
+     * <p>
      * 用户在前端确认后，调用此方法执行。
      * 不走 Agent Loop，直接执行工具并返回结果。
      */
@@ -67,27 +69,30 @@ public class ChatService {
 
     public ChatResponse chat(ChatRequest request) {
         try {
-            String requestBody = buildRequestBody(request, false, true);
-            log.info("LLM 非流式请求: model={}", llmProperties.getModel());
+            log.info("LLM 非流式请求(Spring AI): model={}", llmProperties.getModel());
 
-            HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create(llmProperties.getBaseUrl() + "/openai/v1/chat/completions"))
-                    .header("Authorization", "Bearer " + llmProperties.getApiKey())
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                    .build();
+            // 构建 ChatClient
+            ChatClient chatClient = chatClientBuilder.build();
 
-            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() != 200) {
-                log.error("LLM 请求失败: HTTP {} - {}", response.statusCode(), response.body());
-                return ChatResponse.fail("LLM API 错误: HTTP " + response.statusCode());
+            // 用 ChatClient 的 fluent API 构建请求
+            // .system() 设置系统提示词，.user() 设置用户消息
+            var promptSpec = chatClient.prompt();
+            if (request.getSystemPrompt() != null && !request.getSystemPrompt().isBlank()) {
+                promptSpec = promptSpec.system(request.getSystemPrompt());
             }
+            promptSpec = promptSpec.user(request.getMessage());
 
-            return parseResponse(response.body());
+            // 调用模型，拿到回复
+            String content = promptSpec.call().content();
+            log.info("LLM 响应(Spring AI): content长度={}", content == null ? "null" : content.length());
+
+            if (content == null) {
+                return ChatResponse.fail("模型返回空内容");
+            }
+            return ChatResponse.ok(content, 0, 0);
 
         } catch (Exception e) {
-            log.error("LLM 请求异常", e);
+            log.error("LLM 请求异常(Spring AI)", e);
             return ChatResponse.fail("请求异常: " + e.getMessage());
         }
     }

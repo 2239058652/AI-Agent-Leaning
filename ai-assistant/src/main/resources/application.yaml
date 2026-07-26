@@ -8,6 +8,13 @@ spring:
     username: root
     password: Dingtong1998
     driver-class-name: com.mysql.cj.jdbc.Driver
+  ai:
+    openai:
+      api-key: ak_2Qm1uM3PN6ug9X23Iy1TO24F6bz2q
+      base-url: https://api.longcat.chat/openai
+      chat:
+        options:
+          model: LongCat-2.0
 
 # MyBatis 配置
 mybatis:
