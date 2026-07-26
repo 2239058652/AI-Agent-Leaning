@@ -10,7 +10,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   ai:
     openai:
-      api-key: ak_2Qm1uM3PN6ug9X23Iy1TO24F6bz2q
+      api-key: ${API_MODEL_KEY}
       base-url: https://api.longcat.chat/openai
       chat:
         options:
@@ -25,7 +25,7 @@ mybatis:
 
 # LLM API 配置
 llm:
-  api-key: ak_2Qm1uM3PN6ug9X23Iy1TO24F6bz2q
+  api-key: ${API_MODEL_KEY}
   base-url: https://api.longcat.chat
   model: LongCat-2.0
   timeout: 60
