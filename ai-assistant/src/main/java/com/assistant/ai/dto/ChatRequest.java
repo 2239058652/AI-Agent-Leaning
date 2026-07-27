@@ -19,6 +19,9 @@ public class ChatRequest {
     /** 系统提示词（可选） */
     private String systemPrompt;
 
+    /** 会话 ID（可选，服务端按它存取对话历史） */
+    private String conversationId;
+
     /** 对话历史（可选，多轮对话时传入） */
     private List<Message> history;
 

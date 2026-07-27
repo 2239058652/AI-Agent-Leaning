@@ -87,6 +87,8 @@ function App() {
   const abortRef = useRef<AbortController | null>(null)
   const toolCallsRef = useRef<ToolCall[]>([])
   const toolResultsRef = useRef<ToolResult[]>([])
+  // 会话 ID：页面加载时生成一次，本页所有消息属于同一会话（刷新即开新会话）
+  const conversationIdRef = useRef(crypto.randomUUID())
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -120,7 +122,7 @@ function App() {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg }),
+        body: JSON.stringify({ message: msg, conversationId: conversationIdRef.current }),
         signal: controller.signal,
       })
 
@@ -138,7 +140,7 @@ function App() {
       toolCallsRef.current = []
       toolResultsRef.current = []
 
-      // 先插入一条空的 assistant 消息，后续逐步填充
+      // 先插入一条空的 assistant 消息，后续所有更新都改最后一条
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: '',
@@ -146,64 +148,75 @@ function App() {
         toolResults: [],
       }])
 
+      // eventName 必须在 while 循环外面声明！
+      // 因为 event: 和 data: 可能被拆在两个 TCP 包里到达。
+      // 如果写在 for 循环里面，每次 read() 都会重置，导致类型丢失。
+      let eventName = ''
+
+      console.log('=== SSE 流已连接，开始接收后端数据 ===')
+
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          console.log('SSE 流结束 (done)')
+          break
+        }
 
         buffer += decoder.decode(value, { stream: true })
 
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
-        let eventName = ''
-
         for (const line of lines) {
           const trimmed = line.trim()
           if (!trimmed) continue
 
-          // ---- SSE 事件名行 ----
-          // 格式: "event: tool_call"
+          // 1. 收到事件名行 (event: chunk / confirmation_required 等)
           if (trimmed.startsWith('event:')) {
             eventName = trimmed.substring(6).trim()
+            console.log(`收到事件类型: ${eventName}`)
             continue
           }
 
-          // ---- SSE 数据行 ----
-          // 格式: "data: {...}"
+          // 2. 收到数据行 (data: ...)
           if (!trimmed.startsWith('data:')) continue
 
           const eventData = trimmed.substring(5).trimStart()
 
-          // 处理 [DONE]
+          // 处理结束标记
           if (eventData === '[DONE]') {
+            console.log('收到 [DONE]，本轮对话结束')
             eventName = ''
             continue
           }
 
-          // ---- 工具调用事件 ----
+          // 3. 工具调用事件（画 Timeline）
           if (eventName === 'tool_call') {
             try {
               const tc = JSON.parse(eventData) as ToolCall
               toolCallsRef.current = [...toolCallsRef.current, tc]
+              console.log('收到工具调用:', tc.name)
             } catch { /* ignore parse error */ }
             eventName = ''
             continue
           }
 
-          // ---- 工具结果事件 ----
+          // 4. 工具结果事件
           if (eventName === 'tool_result') {
             try {
               const tr = JSON.parse(eventData) as ToolResult
               toolResultsRef.current = [...toolResultsRef.current, tr]
+              console.log('收到工具结果:', tr.name)
             } catch { /* ignore parse error */ }
             eventName = ''
             continue
           }
 
-          // ---- 敏感操作确认事件 ----
+          // 5. 敏感操作确认事件 → 弹窗
           if (eventName === 'confirmation_required') {
             try {
               const confirm = JSON.parse(eventData)
+              console.log('收到确认请求，准备弹窗:', confirm.toolName)
               setConfirmState({
                 toolName: confirm.toolName,
                 argsJson: confirm.argsJson,
@@ -214,14 +227,16 @@ function App() {
             continue
           }
 
-          // ---- 文本内容事件（默认） ----
-          // 没有 event 字段时，data 就是文本内容
+          // 6. 默认文本内容（chunk）
+          // 注意：这里更新的是我们前面插入的那条空的 assistant 消息
           if (eventName === '' || eventName === 'chunk') {
             assistantContent += eventData
+            console.log('收到文字 chunk，当前累计长度:', assistantContent.length)
           }
           eventName = ''
 
-          // ---- 更新最后一条 assistant 消息 ----
+          // 7. 关键：更新 React state → 界面重新渲染
+          // 每次收到新内容或工具事件，都更新最后一条 assistant 消息
           setMessages(prev => {
             const updated = [...prev]
             updated[updated.length - 1] = {
@@ -344,6 +359,28 @@ function App() {
   }
 
   // ========================================================================
+  // 新对话 — 清服务端记忆 + 换 conversationId + 清空界面
+  // ========================================================================
+
+  const handleNewConversation = async () => {
+    if (loading) {
+      abortRef.current?.abort()
+    }
+
+    const oldId = conversationIdRef.current
+    try {
+      await fetch(`${API_BASE}/api/conversations/${oldId}`, { method: 'DELETE' })
+    } catch {
+      // 删库失败仍开本地新会话，避免卡在旧桌号
+    }
+
+    conversationIdRef.current = crypto.randomUUID()
+    setMessages([])
+    setConfirmState(null)
+    setInput('')
+  }
+
+  // ========================================================================
   // 键盘事件
   // ========================================================================
 
@@ -369,6 +406,14 @@ function App() {
           <h1>AI Assistant</h1>
           <span>LongCat-2.0 · {toolMode ? '工具模式' : '普通模式'}</span>
         </div>
+        <button
+          type="button"
+          className="new-chat-btn"
+          onClick={handleNewConversation}
+          title="清空当前会话并开始新对话"
+        >
+          新对话
+        </button>
         <label className="tool-toggle">
           <input
             type="checkbox"

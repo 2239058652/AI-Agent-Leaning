@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.assistant.ai.mapper.ChatMemoryMapper">
+
+    <!-- 所有会话 ID -->
+    <select id="findConversationIds" resultType="string">
+        SELECT DISTINCT conversation_id
+        FROM chat_memory
+    </select>
+
+    <!-- 某会话的全部消息，按序号升序（顺序即对话顺序，不能省 ORDER BY） -->
+    <select id="findByConversationId" resultType="com.assistant.ai.entity.ChatMemoryEntry">
+        SELECT id, conversation_id, message_index, message_type, content
+        FROM chat_memory
+        WHERE conversation_id = #{conversationId}
+        ORDER BY message_index ASC
+    </select>
+
+    <!-- 插入一条消息 -->
+    <insert id="insert">
+        INSERT INTO chat_memory (conversation_id, message_index, message_type, content)
+        VALUES (#{conversationId}, #{messageIndex}, #{messageType}, #{content})
+    </insert>
+
+    <!-- 删除某会话的全部消息 -->
+    <delete id="deleteByConversationId">
+        DELETE FROM chat_memory
+        WHERE conversation_id = #{conversationId}
+    </delete>
+
+</mapper>

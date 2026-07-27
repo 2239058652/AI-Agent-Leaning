@@ -3,13 +3,10 @@ package com.assistant.ai.controller;
 import com.assistant.ai.dto.ChatRequest;
 import com.assistant.ai.dto.ChatResponse;
 import com.assistant.ai.service.ChatService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
-import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
@@ -50,7 +47,7 @@ public class ChatController {
 
     /**
      * 执行已确认的敏感操作
-     *
+     * <p>
      * 当 Agent Loop 遇到敏感操作时会暂停，前端弹窗让用户确认，
      * 用户确认后调用这个接口执行。
      */
@@ -59,5 +56,17 @@ public class ChatController {
         return chatService.executeConfirmed(request.toolName(), request.argsJson());
     }
 
-    public record ConfirmRequest(String toolName, String argsJson) {}
+    /**
+     * 删除对话
+     *
+     *
+     */
+    @DeleteMapping("/conversations/{id}")
+    public ChatResponse deleteById(@PathVariable("id") String id) {
+        if (id == null || id.isBlank()) throw new IllegalArgumentException("conversationId 不能为空");
+        return chatService.deleteByConversationId(id);
+    }
+
+    public record ConfirmRequest(String toolName, String argsJson) {
+    }
 }

@@ -45,8 +45,25 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-.tool-toggle {
+.new-chat-btn {
   margin-left: auto;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.new-chat-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: rgba(108, 92, 231, 0.08);
+}
+
+.tool-toggle {
   display: flex;
   align-items: center;
   gap: 8px;

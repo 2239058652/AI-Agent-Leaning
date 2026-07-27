@@ -98,13 +98,15 @@ pnpm dev
 
 ## 学习进度
 
+**续接请读 [`HANDOFF.md`](./HANDOFF.md)**（任意新对话 / 换模型的权威进度）。
+
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 阶段1 | Spring Boot 工程化补强（异常处理、校验、分层） | ✅ |
-| 阶段2 | LLM API 底层调用（HTTP + SSE 流式） | ✅ |
+| 阶段2 | LLM API 底层调用（HTTP + SSE 流式 → 后迁 Spring AI） | ✅ |
 | 阶段3 | Tool Use / Function Calling + Agent Loop | ✅ |
-| 阶段4 | 前端 Agent 闭环（Timeline、中断、重试） | ✅ |
+| 阶段4 | 前端 Agent 闭环（Timeline、中断、重试、敏感确认） | ✅ |
 | 阶段5 | MCP 协议（Server + 客户端集成） | ✅ |
-| 阶段6 | 框架选型与 Agent 状态管理 | 待做 |
+| 阶段6 | Spring AI + 对话历史 + MySQL 落库 + 清空会话 | 核心✅ / 收尾中 |
 | 阶段7 | 鉴权与权限边界 | 待做 |
 | 阶段8-10 | 可观测性、限流成本统计、整合演示 | 待做 |

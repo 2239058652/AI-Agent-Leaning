@@ -110,7 +110,7 @@ public class ToolRegistry {
 
         register(ToolDefinition.builder()
                 .name("cancel_order")
-                .description("取消订单。只有PENDING(待支付)状态的订单可以取消。取消前请确认用户意图。")
+                .description("取消订单。只有PENDING(待支付)状态的订单可以取消。")
                 .parameters(parseSchema("""
                         {
                           "type": "object",
@@ -193,7 +193,7 @@ public class ToolRegistry {
 
     /**
      * 从 MCP Server 注册远程工具
-     *
+     * <p>
      * 将 MCP 工具转为本地 ToolDefinition，这样模型看到的工具列表里
      * 既有本地工具也有远程工具，执行时由 ToolService 根据 source 字段路由。
      */
