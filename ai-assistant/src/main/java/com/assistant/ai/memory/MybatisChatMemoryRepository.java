@@ -18,7 +18,7 @@ import java.util.Objects;
 
 /**
  * ChatMemoryRepository 的 MyBatis 实现（练习版 - 阶段6 巩固期）
- *
+ * <p>
  * 目的：理解「真正查库」是如何发生的。
  * 关键：这是框架 SPI 的实现点，上层（窗口策略、Advisor）不关心底下是 MySQL 还是 Redis。
  */

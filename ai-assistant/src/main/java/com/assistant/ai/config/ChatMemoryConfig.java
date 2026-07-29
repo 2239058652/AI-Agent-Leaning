@@ -8,7 +8,6 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * 对话记忆配置（练习版 - 阶段6 巩固期）
- *
  * 目的：理解「记忆管道」是如何把库里的聊天记录接进模型的。
  * 核心：Advisor 把历史查/写到库，框架在调模型前后自动调用。
  */

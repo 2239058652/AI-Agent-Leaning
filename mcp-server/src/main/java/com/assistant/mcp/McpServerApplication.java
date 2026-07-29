@@ -8,7 +8,7 @@ import org.springframework.boot.web.servlet.context.ServletWebServerApplicationC
  * MCP Server Spring Boot 启动类
  * <p>
  * 用 HTTP 传输替代 stdio，支持远程连接。
- * 启动后监听 http://localhost:8090/mcp
+ * 启动后监听 <a href="http://localhost:3190/mcp">...</a>
  */
 @SpringBootApplication
 public class McpServerApplication {
@@ -16,8 +16,8 @@ public class McpServerApplication {
     public static void main(String[] args) {
         var context = SpringApplication.run(McpServerApplication.class, args);
         int port = ((ServletWebServerApplicationContext) context).getWebServer().getPort();
-        System.out.println("""
-
+        System.out.printf("""
+                
                 ╔═════════════════════════════════════════════════════════════╗
                 ║                                                             ║
                 ║   🔌 MCP Server Started Successfully!                        ║
@@ -26,6 +26,6 @@ public class McpServerApplication {
                 ║   🔧 Tool:      get_weather                                 ║
                 ║                                                             ║
                 ╚═════════════════════════════════════════════════════════════╝
-                """.formatted(port));
+                %n""", port);
     }
 }
