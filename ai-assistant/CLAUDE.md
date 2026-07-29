@@ -5,7 +5,9 @@ Spring Boot 3.5 / Java 17，从零搭建的 AI 助手。
 
 ## 当前阶段
 
-**阶段6 进行中**：Spring AI + 对话历史 + MySQL Checkpoint（手写）+ 清空会话（已验证）。
+**阶段6 核心已完成**（Spring AI + 对话记忆落库 + 清空会话，已验证）。  
+**当前**：L3 巩固期（见根目录 `L3_CONSOLIDATION.md`），勿直接当「阶段7」。  
+说明：这里的「Checkpoint」实为**对话记忆落库**，非严格 Agent 步骤恢复。
 
 ## 项目结构（核心）
 

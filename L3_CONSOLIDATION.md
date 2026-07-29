@@ -1,0 +1,71 @@
+# L3 巩固期（进阶段7 之前）
+
+> **配套**：进度权威见 `HANDOFF.md`。  
+> **目的**：把 0–6 **能跑**变成 **能讲清、能独立改**，再进阶段7。  
+> **原则**：你执笔；AI 只需求/验收/review；禁止「把某模块直接写好」。
+
+---
+
+## 为何要做 L3
+
+- 代码多由 AI 写、用户看，**所有权弱**
+- 记忆管道 / 工具桥 / MCP 仍模糊
+- 直接开阶段7会在半懂上叠权限，收益差
+
+---
+
+## 必过块
+
+| 块 | 内容 | 过关标准（口述即可） |
+|---|---|---|
+| **M1 记忆** | Advisor → 窗口 → Repository → Mapper → Prompt | 谁查库、谁拼进模型；去掉 advisors 会失忆、库行可仍在；saveAll 整体替换 |
+| **M2 调用** | 非流式 + 流式 SSE | 链式 prompt 组装；emitter/reader；chunk 如何上屏 |
+| **M3 工具** | 1 个本地只读工具一圈 | schema → 调用 → ToolService 执行 → 回灌 → 最终回复 |
+| **M4 敏感** | 确认两段式 | 弹窗 SSE vs execute-confirmed；确认后不走 Agent Loop |
+| **M5 MCP** | Server/Client + get_weather | 谁提供工具、如何发现、调用路径、关 server 现象 |
+
+**建议顺序**：M1 → M3 → M5 → M2 → M4 → 总图口述 → 阶段7  
+
+**巩固期不做**：整仓重写、阶段7 代码、加 JDBC starter（除非你明确要求）、扩业务、大改前端。
+
+---
+
+## 实施方式
+
+1. 每块：你先流程图/伪代码 → 对照现仓读代码 → 口述过关  
+2. 可选：`practice/` 下做最小练习，不必推倒主仓  
+3. 卡住时 AI 给方向，不代写核心  
+
+### M1 必读文件
+
+- `ChatService`（`.advisors` / `memoryAdvisor`）
+- `ChatMemoryConfig`
+- `MybatisChatMemoryRepository`
+- `ChatMemoryMapper.xml`
+
+### M1 自测三题
+
+1. 第二句「我叫什么」从发送到模型看到历史，经过哪些对象？  
+2. 注释 `.advisors(...)` 后：模型？库？  
+3. 为何 saveAll 先删后插？  
+
+---
+
+## 进阶段7 门槛
+
+- [ ] M1–M3 过关（M4、M5 强烈建议）  
+- [ ] 能区分：conversationId ≠ userId；对话记忆 ≠ Agent Checkpoint  
+- [ ] 能一句话说清：阶段7 补的是「谁」与权限，确认不能替代授权  
+
+---
+
+## 当前勾选
+
+| 块 | 状态 |
+|---|---|
+| M1 | 进行中（口述半对，需对照代码补全链路） |
+| M2–M5 | 未开始 |
+
+---
+
+**下一动作**：用户对照 M1 必读文件，用自己的话重答 M1 三题 → AI review → 勾选 M1。

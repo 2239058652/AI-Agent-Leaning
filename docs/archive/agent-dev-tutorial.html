@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent 开发学习教程 - 阶段 0-6</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg: #f8fafc;
+            --bg-code: #1e293b;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: white;
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 20px 0;
+            z-index: 100;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 700;
+            padding: 0 20px 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+
+        .nav-group {
+            margin-bottom: 10px;
+        }
+
+        .nav-group-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-light);
+            padding: 10px 20px 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 8px 20px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: var(--bg);
+            color: var(--primary);
+        }
+
+        .nav-link.active {
+            background: #eff6ff;
+            color: var(--primary);
+            border-right: 3px solid var(--primary);
+            font-weight: 500;
+        }
+
+        /* 主内容区 */
+        .main {
+            margin-left: 280px;
+            padding: 40px;
+            max-width: 1000px;
+        }
+
+        /* 标题 */
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--primary);
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 40px 0 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary);
+        }
+
+        h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 30px 0 15px;
+            color: var(--primary-dark);
+        }
+
+        h4 {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 20px 0 10px;
+        }
+
+        /* 段落 */
+        p {
+            margin-bottom: 15px;
+        }
+
+        /* 代码块 */
+        pre {
+            background: var(--bg-code);
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        code {
+            font-family: 'Fira Code', 'Consolas', monospace;
+        }
+
+        p code, li code {
+            background: #f1f5f9;
+            color: #e11d48;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        /* 表格 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg);
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        /* 列表 */
+        ul, ol {
+            margin-bottom: 15px;
+            padding-left: 25px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        /* 提示框 */
+        .insight {
+            background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+            border-left: 4px solid var(--primary);
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+
+        .insight-title {
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .insight p {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .insight p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* 流程图 */
+        .flow {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.8;
+            overflow-x: auto;
+        }
+
+        /* 阶段标记 */
+        .stage-badge {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+
+        /* 分隔线 */
+        hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 40px 0;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .main {
+                margin-left: 0;
+                padding: 20px;
+            }
+        }
+
+        /* 代码高亮 */
+        .keyword { color: #c084fc; }
+        .string { color: #86efac; }
+        .comment { color: #64748b; }
+        .annotation { color: #fbbf24; }
+        .type { color: #60a5fa; }
+
+        /* 锚点偏移 */
+        [id] {
+            scroll-margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 侧边栏导航 -->
+    <nav class="sidebar">
+        <div class="sidebar-title">📚 Agent 开发教程</div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">开始</div>
+            <a href="#overview" class="nav-link">项目概览</a>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">阶段 0-1 基础</div>
+            <a href="#stage0" class="nav-link">阶段 0：业务边界</a>
+            <a href="#stage1" class="nav-link">阶段 1：工程化</a>
+            <a href="#stage1-layer" class="nav-link">· 分层架构</a>
+            <a href="#stage1-exception" class="nav-link">· 异常处理</a>
+            <a href="#stage1-config" class="nav-link">· 配置映射</a>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">阶段 2 LLM 调用</div>
+            <a href="#stage2" class="nav-link">阶段 2：LLM API</a>
+            <a href="#stage2-chat" class="nav-link">· ChatService</a>
+            <a href="#stage2-sse" class="nav-link">· SseEmitter</a>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">阶段 3 工具调用</div>
+            <a href="#stage3" class="nav-link">阶段 3：Function Calling</a>
+            <a href="#stage3-definition" class="nav-link">· ToolDefinition</a>
+            <a href="#stage3-registry" class="nav-link">· ToolRegistry</a>
+            <a href="#stage3-service" class="nav-link">· ToolService</a>
+            <a href="#stage3-validator" class="nav-link">· ToolValidator</a>
+            <a href="#stage3-callback" class="nav-link">· ToolCallbackProvider</a>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">阶段 3.5 安全</div>
+            <a href="#stage35" class="nav-link">阶段 3.5：安全边界</a>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">阶段 4 前端</div>
+            <a href="#stage4" class="nav-link">阶段 4：前端闭环</a>
+            <a href="#stage4-sse" class="nav-link">· SSE 解析</a>
+            <a href="#stage4-timeline" class="nav-link">· Timeline</a>
+            <a href="#stage4-confirm" class="nav-link">· 确认弹窗</a>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">阶段 5 MCP</div>
+            <a href="#stage5" class="nav-link">阶段 5：MCP 协议</a>
+            <a href="#stage5-client" class="nav-link">· McpClientService</a>
+            <a href="#stage5-register" class="nav-link">· 工具注册</a>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">阶段 6 记忆</div>
+            <a href="#stage6" class="nav-link">阶段 6：对话记忆</a>
+            <a href="#stage6-config" class="nav-link">· ChatMemoryConfig</a>
+            <a href="#stage6-repository" class="nav-link">· Repository 实现</a>
+            <a href="#stage6-advisor" class="nav-link">· Advisor</a>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">总结</div>
+            <a href="#summary" class="nav-link">核心回路</a>
+            <a href="#classes" class="nav-link">类职责总结</a>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <main class="main">
+        <h1>🚀 Agent 开发学习教程</h1>
+        <p>阶段 0-6 完整教学，涵盖每个 API、注解、方法调用的作用。</p>
+
+        <hr>
+
+        <!-- 项目概览 -->
+        <h2 id="overview">项目概览</h2>
+        <p>你的项目是一个 <strong>AI 助手</strong>，核心业务是<strong>订单管理</strong>。用户通过自然语言与 AI 对话，AI 可以：</p>
+        <ul>
+            <li><strong>只读查询</strong>：查订单列表、查今日统计</li>
+            <li><strong>聚合分析</strong>：统计今日订单数、成交额</li>
+            <li><strong>敏感写操作</strong>：取消订单（需要用户确认）</li>
+        </ul>
+
+        <div class="flow">
+            <strong>最小业务闭环：</strong><br><br>
+            用户提问 → 模型判断是否需要工具 → 调用工具 → 执行 → 返回结果 → 模型生成回复 → 前端展示<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;如果是敏感操作 → 前端弹窗 → 用户确认 → 后端执行
+        </div>
+
+        <hr>
+
+        <!-- 阶段 0 -->
+        <h2 id="stage0"><span class="stage-badge">阶段 0</span>主线项目与业务边界</h2>
+
+        <h3>0.1 业务场景定义</h3>
+        <p>三类操作的划分依据：</p>
+        <table>
+            <tr>
+                <th>类型</th>
+                <th>工具</th>
+                <th>是否需要确认</th>
+            </tr>
+            <tr>
+                <td>只读查询</td>
+                <td><code>query_orders</code></td>
+                <td>直接执行</td>
+            </tr>
+            <tr>
+                <td>聚合分析</td>
+                <td><code>analyze_orders</code></td>
+                <td>直接执行</td>
+            </tr>
+            <tr>
+                <td>敏感写操作</td>
+                <td><code>cancel_order</code></td>
+                <td>必须走确认流程</td>
+            </tr>
+        </table>
+
+        <p><strong>为什么这样划分？</strong></p>
+        <ul>
+            <li>只读操作不会修改数据，错了也没损失</li>
+            <li>写操作会改变业务状态，必须有「刹车」机制</li>
+            <li>这是 Agent 系统和普通 CRUD 的核心区别：<strong>模型不能直接执行破坏性操作</strong></li>
+        </ul>
+
+        <hr>
+
+        <!-- 阶段 1 -->
+        <h2 id="stage1"><span class="stage-badge">阶段 1</span>Spring Boot 工程化</h2>
+
+        <h3 id="stage1-layer">1.1 分层架构</h3>
+        <div class="flow">
+            Controller (ChatController.java)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓ 只负责：参数接收、校验、响应封装<br>
+            Service (ChatService.java, OrderService.java)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓ 只负责：业务逻辑、事务边界<br>
+            Mapper (OrderMapper.java, ChatMemoryMapper.java)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓ 只负责：数据访问（SQL）
+        </div>
+
+        <h4>关键注解</h4>
+        <table>
+            <tr>
+                <th>注解</th>
+                <th>作用</th>
+                <th>示例</th>
+            </tr>
+            <tr>
+                <td><code>@RestController</code></td>
+                <td>标记为 REST 控制器，返回值自动序列化为 JSON</td>
+                <td><code>ChatController</code></td>
+            </tr>
+            <tr>
+                <td><code>@RequestMapping("/api")</code></td>
+                <td>路由前缀</td>
+                <td>所有接口以 <code>/api</code> 开头</td>
+            </tr>
+            <tr>
+                <td><code>@PostMapping("/chat")</code></td>
+                <td>POST 请求映射</td>
+                <td><code>POST /api/chat</code></td>
+            </tr>
+            <tr>
+                <td><code>@DeleteMapping("/{id}")</code></td>
+                <td>DELETE 请求映射，<code>{id}</code> 是路径变量</td>
+                <td><code>DELETE /api/conversations/xxx</code></td>
+            </tr>
+            <tr>
+                <td><code>@RequestBody</code></td>
+                <td>从请求体解析 JSON 参数</td>
+                <td><code>ChatRequest request</code></td>
+            </tr>
+            <tr>
+                <td><code>@PathVariable("id")</code></td>
+                <td>从路径取变量</td>
+                <td><code>{id}</code></td>
+            </tr>
+            <tr>
+                <td><code>@Valid</code></td>
+                <td>触发参数校验（配合 <code>@NotBlank</code>、<code>@Size</code>）</td>
+                <td><code>@Valid @RequestBody ChatRequest</code></td>
+            </tr>
+            <tr>
+                <td><code>@Service</code></td>
+                <td>标记为业务服务层</td>
+                <td><code>ChatService</code></td>
+            </tr>
+            <tr>
+                <td><code>@Component</code></td>
+                <td>通用组件标记</td>
+                <td><code>ToolRegistry</code></td>
+            </tr>
+            <tr>
+                <td><code>@Mapper</code></td>
+                <td>MyBatis Mapper 接口标记</td>
+                <td><code>OrderMapper</code></td>
+            </tr>
+            <tr>
+                <td><code>@Configuration</code></td>
+                <td>配置类</td>
+                <td><code>ChatMemoryConfig</code></td>
+            </tr>
+            <tr>
+                <td><code>@Bean</code></td>
+                <td>在配置类中定义 Bean</td>
+                <td><code>chatMemory()</code></td>
+            </tr>
+            <tr>
+                <td><code>@Data</code> (Lombok)</td>
+                <td>自动生成 getter/setter/toString/equals/hashCode</td>
+                <td><code>Order</code></td>
+            </tr>
+            <tr>
+                <td><code>@Slf4j</code> (Lombok)</td>
+                <td>自动生成 <code>log</code> 日志对象</td>
+                <td><code>OrderService</code></td>
+            </tr>
+            <tr>
+                <td><code>@RequiredArgsConstructor</code></td>
+                <td>生成包含 <code>final</code> 字段的构造函数（替代 <code>@Autowired</code>）</td>
+                <td><code>OrderService</code></td>
+            </tr>
+            <tr>
+                <td><code>@Builder</code> (Lombok)</td>
+                <td>生成 Builder 模式代码</td>
+                <td><code>ToolDefinition</code></td>
+            </tr>
+            <tr>
+                <td><code>@PostConstruct</code></td>
+                <td>Bean 初始化后执行</td>
+                <td><code>ToolRegistry.init()</code></td>
+            </tr>
+            <tr>
+                <td><code>@PreDestroy</code></td>
+                <td>Bean 销毁前执行</td>
+                <td><code>McpClientService.destroy()</code></td>
+            </tr>
+        </table>
+
+        <h3 id="stage1-exception">1.2 异常处理</h3>
+
+        <h4>BusinessException（业务异常）</h4>
+        <pre><code>@Getter
+public class BusinessException extends RuntimeException {
+    private final String code;  // 错误码，如 "VALIDATION_ERROR"
+
+    public BusinessException(String code, String message) {
+        super(message);
+        this.code = code;
+    }
+}</code></pre>
+
+        <p><strong>作用</strong>：Service 层抛出明确的业务错误，而不是返回 null 或错误字符串。</p>
+        <p><strong>优势</strong>：</p>
+        <ul>
+            <li>调用方不需要每个方法都写 <code>if-else</code> 判断返回值</li>
+            <li>GlobalExceptionHandler 统一处理</li>
+            <li>错误码 + 错误消息，前端可以精确处理</li>
+        </ul>
+
+        <h4>GlobalExceptionHandler（全局异常处理器）</h4>
+        <pre><code>@Slf4j
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    // 参数校验失败（@Valid 触发）
+    <span class="annotation">@ExceptionHandler</span>(MethodArgumentNotValidException.class)
+    <span class="annotation">@ResponseStatus</span>(HttpStatus.BAD_REQUEST)
+    public ApiResponse&lt;Void&gt; handleValidation(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(e -> e.getField() + ": " + e.getDefaultMessage())
+                .collect(Collectors.joining("; "));
+        return ApiResponse.fail("VALIDATION_ERROR", message);
+    }
+
+    // 业务异常
+    <span class="annotation">@ExceptionHandler</span>(BusinessException.class)
+    public ApiResponse&lt;Void&gt; handleBusiness(BusinessException ex) {
+        return ApiResponse.fail(ex.getCode(), ex.getMessage());
+    }
+
+    // 兜底：未知异常
+    <span class="annotation">@ExceptionHandler</span>(Exception.class)
+    <span class="annotation">@ResponseStatus</span>(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ApiResponse&lt;Void&gt; handleUnknown(Exception ex) {
+        log.error("未知异常", ex);
+        return ApiResponse.fail("INTERNAL_ERROR", "服务内部错误，请稍后重试");
+    }
+}</code></pre>
+
+        <p><strong>关键注解</strong>：</p>
+        <ul>
+            <li><code>@RestControllerAdvice</code> = <code>@ControllerAdvice</code> + <code>@ResponseBody</code>，拦截所有 Controller 异常</li>
+            <li><code>@ExceptionHandler(XxxException.class)</code> - 处理指定类型的异常</li>
+            <li><code>@ResponseStatus(HttpStatus.BAD_REQUEST)</code> - 设置 HTTP 状态码</li>
+        </ul>
+
+        <div class="flow">
+            <strong>执行流程：</strong><br><br>
+            Controller 抛出异常 → GlobalExceptionHandler 捕获 → 返回统一格式 ApiResponse
+        </div>
+
+        <h3 id="stage1-config">1.3 配置映射</h3>
+
+        <h4>LlmProperties</h4>
+        <pre><code>@Data
+@Component
+@ConfigurationProperties(prefix = "llm")
+public class LlmProperties {
+    private String apiKey = "";
+    private String baseUrl = "https://api.longcat.chat";
+    private String model = "LongCat-2.0";
+    private int timeout = 60;
+}</code></pre>
+
+        <p><strong>关键注解</strong>：</p>
+        <ul>
+            <li><code>@ConfigurationProperties(prefix = "llm")</code> - 将 yaml 中 <code>llm.xxx</code> 映射到字段</li>
+            <li><code>@Component</code> - 注册为 Spring Bean</li>
+            <li><code>@Data</code> - 自动生成 getter/setter</li>
+        </ul>
+
+        <p><strong>对应 yaml</strong>：</p>
+        <pre><code>llm:
+  api-key: "sk-xxx"
+  base-url: "https://api.longcat.chat"
+  model: "LongCat-2.0"
+  timeout: 60</code></pre>
+
+        <hr>
+
+        <!-- 阶段 2 -->
+        <h2 id="stage2"><span class="stage-badge">阶段 2</span>LLM API 调用</h2>
+
+        <h3 id="stage2-chat">2.1 ChatService 三种调用方式</h3>
+
+        <h4>2.1.1 非流式（chat）</h4>
+        <pre><code>public ChatResponse chat(ChatRequest request) {
+    ChatClient chatClient = chatClientBuilder.build();  // 构建客户端
+    var promptSpec = chatClient.prompt();                // 创建 prompt
+    promptSpec = promptSpec.system(request.getSystemPrompt());  // 系统提示词
+    promptSpec = promptSpec.user(request.getMessage());         // 用户消息
+    promptSpec = promptSpec.advisors(memoryAdvisor(request));   // 添加记忆 Advisor
+
+    String content = promptSpec.call().content();  // 调用模型，获取完整回复
+    return ChatResponse.ok(content, 0, 0);
+}</code></pre>
+
+        <div class="flow">
+            <strong>流程：</strong><br><br>
+            构建 ChatClient → 设置 system/user 消息 → 添加 Advisor → 调用模型 → 返回完整文本
+        </div>
+
+        <h4>2.1.2 流式（chatStream）</h4>
+        <pre><code>public void chatStream(ChatRequest request, SseEmitter emitter) {
+    executor.execute(() -> {  // 异步执行，不阻塞主线程
+        ChatClient chatClient = chatClientBuilder.build();
+        var promptSpec = chatClient.prompt()
+                .system(request.getSystemPrompt())
+                .user(request.getMessage())
+                .advisors(memoryAdvisor(request));
+
+        Flux&lt;String&gt; flux = promptSpec.stream().content();  // 流式调用
+
+        flux.subscribe(
+            chunk -> emitter.send(SseEmitter.event().name("chunk").data(chunk)),  // 每收到一块就发给前端
+            error -> emitter.completeWithError(error),                           // 错误时关闭
+            () -> {                                                              // 完成时
+                emitter.send(SseEmitter.event().name("done").data("[DONE]"));
+                emitter.complete();
+            }
+        );
+    });
+}</code></pre>
+
+        <p><strong>关键点</strong>：</p>
+        <ul>
+            <li><code>SseEmitter</code> - 服务器推送事件（SSE）发射器</li>
+            <li><code>Flux&lt;String&gt;</code> - Reactor 的响应式流，逐个发射数据块</li>
+            <li><code>subscribe(onNext, onError, onComplete)</code> - 订阅流，注册三个回调</li>
+        </ul>
+
+        <h4>2.1.3 带工具流式（chatStreamWithTools）</h4>
+        <pre><code>public void chatStreamWithTools(ChatRequest request, SseEmitter emitter) {
+    executor.execute(() -> {
+        var toolCallbacks = toolCallbackProvider.getToolCallbacks();  // 获取工具列表
+
+        ChatClient chatClient = chatClientBuilder.build();
+        Flux&lt;String&gt; flux = chatClient.prompt()
+                .system(request.getSystemPrompt())
+                .user(request.getMessage())
+                .toolCallbacks(toolCallbacks)  // 注册工具给 Spring AI
+                .toolContext(Map.of("emitter", emitter))  // 传递带外数据（emitter）
+                .advisors(memoryAdvisor(request))
+                .stream()
+                .content();
+
+        flux.subscribe(/* 同上 */);
+    });
+}</code></pre>
+
+        <p><strong>关键点</strong>：</p>
+        <ul>
+            <li><code>.toolCallbacks(toolCallbacks)</code> - 注册工具，Spring AI 自动处理 Agent Loop</li>
+            <li><code>.toolContext(Map.of("emitter", emitter))</code> - 传递 emitter 给工具回调（用于发送确认事件）</li>
+        </ul>
+
+        <h3 id="stage2-sse">2.2 SseEmitter 详解</h3>
+        <pre><code>SseEmitter emitter = new SseEmitter(120_000L);  // 超时时间 120 秒</code></pre>
+
+        <p><strong>SSE 事件格式</strong>：</p>
+        <pre><code>event: chunk
+data: 你好
+
+event: done
+data: [DONE]</code></pre>
+
+        <p><strong>前端解析</strong>（App.tsx）：</p>
+        <pre><code>const reader = response.body?.getReader()
+while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+
+    for (const line of lines) {
+        if (line.startsWith('event:')) {
+            eventName = line.substring(6).trim()  // 提取事件名
+        }
+        if (line.startsWith('data:')) {
+            const data = line.substring(5).trim()
+            // 根据 eventName 处理 data
+        }
+    }
+}</code></pre>
+
+        <hr>
+
+        <!-- 阶段 3 -->
+        <h2 id="stage3"><span class="stage-badge">阶段 3</span>Tool Use / Function Calling</h2>
+
+        <h3 id="stage3-definition">3.1 ToolDefinition（工具定义）</h3>
+        <pre><code>@Data
+@Builder
+public class ToolDefinition {
+    private String name;           // 工具名称，模型通过这个调用
+    private String description;    // 工具描述，模型根据这个决定何时调用
+    private JsonNode parameters;   // JSON Schema，告诉模型需要哪些参数
+
+    @Builder.Default
+    private boolean sensitive = false;  // 是否敏感操作
+
+    @Builder.Default
+    private ToolSource source = ToolSource.LOCAL;  // 工具来源：LOCAL 或 MCP
+
+    private String mcpServer;  // MCP Server 名称（仅 source=MCP 时有值）
+
+    public enum ToolSource {
+        LOCAL,  // 本地工具
+        MCP     // MCP 工具
+    }
+}</code></pre>
+
+        <p><strong>示例</strong>：</p>
+        <pre><code>ToolDefinition.builder()
+    .name("query_orders")
+    .description("查询订单列表。可按状态筛选：PENDING(待支付)、PAID(已支付)、CANCELLED(已取消)")
+    .parameters(parseSchema("""
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "description": "订单状态筛选"
+            }
+          },
+          "required": []
+        }
+        """))
+    .sensitive(false)  // 只读操作
+    .build();</code></pre>
+
+        <h3 id="stage3-registry">3.2 ToolRegistry（工具注册表）</h3>
+        <pre><code>@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ToolRegistry {
+    private final Map&lt;String, ToolDefinition&gt; tools = new LinkedHashMap&lt;&gt;();
+
+    @PostConstruct
+    public void init() {
+        // 注册所有工具
+        register(ToolDefinition.builder().name("get_current_date")...build());
+        register(ToolDefinition.builder().name("query_orders")...build());
+        register(ToolDefinition.builder().name("cancel_order").sensitive(true)...build());
+
+        // 注册 MCP 工具
+        registerMcpTools();
+    }
+
+    private void register(ToolDefinition definition) {
+        tools.put(definition.getName(), definition);
+    }
+
+    public boolean isAllowed(String name) {
+        return tools.containsKey(name);  // 白名单检查
+    }
+
+    public List&lt;ToolDefinition&gt; getAllTools() {
+        return List.copyOf(tools.values());
+    }
+}</code></pre>
+
+        <p><strong>职责</strong>：</p>
+        <ul>
+            <li>集中管理所有合法工具</li>
+            <li>提供白名单检查</li>
+            <li>生成发给模型的 tools JSON</li>
+        </ul>
+
+        <h3 id="stage3-service">3.3 ToolService（工具执行服务）</h3>
+        <pre><code>@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ToolService {
+    private final ToolRegistry toolRegistry;
+    private final ToolValidator toolValidator;
+    private final McpClientService mcpClientService;
+    private final OrderService orderService;
+
+    public ToolResult execute(String toolName, String argsJson) {
+        // 1. 白名单检查
+        if (!toolRegistry.isAllowed(toolName)) {
+            return ToolResult.success("错误: 未知工具 " + toolName);
+        }
+
+        ToolDefinition toolDef = toolRegistry.getTool(toolName).orElseThrow();
+
+        // 2. 敏感操作检查
+        if (toolDef.isSensitive()) {
+            return ToolResult.confirmRequired(toolName, argsJson);  // 返回"需要确认"
+        }
+
+        // 3. 参数校验
+        ToolValidator.ValidationResult validation = toolValidator.validate(toolDef, argsJson);
+        if (!validation.success()) {
+            return ToolResult.success("错误: 参数校验失败 — " + String.join("; ", validation.errors()));
+        }
+
+        // 4. 执行工具
+        String result;
+        if (toolDef.getSource() == ToolDefinition.ToolSource.MCP) {
+            result = executeMcpTool(toolName, argsJson);  // MCP 工具走远程
+        } else {
+            result = switch (toolName) {  // 本地工具走 switch
+                case "query_orders" -> executeQueryOrders(argsJson);
+                case "cancel_order" -> executeCancelOrder(argsJson);
+                // ...
+            };
+        }
+
+        return ToolResult.success(result);
+    }
+}</code></pre>
+
+        <div class="flow">
+            <strong>执行流程：</strong><br><br>
+            白名单检查 → 敏感操作检查 → 参数校验 → 路由到 MCP 或本地 → 执行 → 返回结果
+        </div>
+
+        <h3 id="stage3-validator">3.4 ToolValidator（参数校验）</h3>
+        <pre><code>@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ToolValidator {
+
+    public ValidationResult validate(ToolDefinition tool, String argsJson) {
+        List&lt;String&gt; errors = new ArrayList&lt;&gt;();
+        JsonNode schema = tool.getParameters();
+        JsonNode args = new ObjectMapper().readTree(argsJson);
+
+        // 校验必填参数
+        JsonNode required = schema.path("required");
+        if (required.isArray()) {
+            for (JsonNode field : required) {
+                String fieldName = field.asText();
+                if (!args.has(fieldName) || args.path(fieldName).isNull()) {
+                    errors.add("缺少必填参数: " + fieldName);
+                }
+            }
+        }
+
+        // 校验参数类型
+        JsonNode properties = schema.path("properties");
+        if (properties.isObject()) {
+            var fieldIt = properties.fields();
+            while (fieldIt.hasNext()) {
+                var entry = fieldIt.next();
+                String fieldName = entry.getKey();
+                String expectedType = entry.getValue().path("type").asText("");
+                String actualType = getJsonNodeType(args.path(fieldName));
+
+                if (!expectedType.equals(actualType)) {
+                    errors.add("参数 " + fieldName + " 类型错误");
+                }
+            }
+        }
+
+        return errors.isEmpty() ? ValidationResult.ok() : ValidationResult.fail(errors);
+    }
+}</code></pre>
+
+        <h3 id="stage3-callback">3.5 ToolCallbackProvider（工具桥接）</h3>
+        <pre><code>@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ToolCallbackProvider {
+    private final ToolRegistry toolRegistry;
+    private final ToolService toolService;
+    private final ObjectMapper objectMapper;
+
+    public List&lt;ToolCallback&gt; getToolCallbacks() {
+        return toolRegistry.getAllTools().stream()
+                .map(this::createCallback)
+                .toList();
+    }
+
+    private ToolCallback createCallback(ToolDefinition toolDef) {
+        BiFunction&lt;Map&lt;String, Object&gt;, ToolContext, String&gt; toolFunction = (args, ctx) -> {
+            String argsJson = objectMapper.writeValueAsString(args);
+            ToolResult result = toolService.execute(toolDef.getName(), argsJson);
+
+            if (result.isNeedsConfirmation()) {
+                // 从 ToolContext 取出 emitter
+                SseEmitter emitter = (SseEmitter) ctx.getContext().get("emitter");
+
+                // 给前端发 confirmation_required 事件
+                ObjectNode confirmEvent = objectMapper.createObjectNode();
+                confirmEvent.put("toolName", result.getToolName());
+                confirmEvent.put("argsJson", result.getArgsJson());
+                emitter.send(SseEmitter.event().name("confirmation_required").data(confirmEvent));
+
+                // 返回给模型的指令
+                return "操作尚未执行。系统已在界面上弹出确认框，请告知用户在弹窗中点击确认或取消。";
+            }
+
+            return result.getResult();
+        };
+
+        return FunctionToolCallback.&lt;Map&lt;String, Object&gt;, String&gt;builder(toolDef.getName(), toolFunction)
+                .description(toolDef.getDescription())
+                .inputType(Map.class)
+                .inputSchema(schema)
+                .build();
+    }
+}</code></pre>
+
+        <p><strong>关键点</strong>：</p>
+        <ul>
+            <li>这是 <strong>Spring AI 和 ToolService 之间的桥梁</strong></li>
+            <li>Spring AI 调工具时 → 走这个 callback → 委托给 ToolService</li>
+            <li>敏感操作时 → 从 ToolContext 取 emitter → 发确认事件给前端</li>
+        </ul>
+
+        <hr>
+
+        <!-- 阶段 3.5 -->
+        <h2 id="stage35"><span class="stage-badge">阶段 3.5</span>工具安全边界</h2>
+
+        <h3>安全机制三层防护</h3>
+        <div class="flow">
+            第1层：白名单（ToolRegistry.isAllowed）<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓ 只允许注册过的工具执行<br>
+            第2层：敏感操作检查（toolDef.isSensitive）<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓ 敏感操作返回"需要确认"，不直接执行<br>
+            第3层：参数校验（ToolValidator.validate）<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓ 校验必填参数和类型<br>
+            执行：ToolService.execute
+        </div>
+
+        <h3>敏感操作确认流程</h3>
+        <div class="flow">
+            模型调 cancel_order<br>
+            ↓<br>
+            ToolService 检测到 sensitive=true<br>
+            ↓<br>
+            返回 confirmRequired<br>
+            ↓<br>
+            ToolCallbackProvider 从 ToolContext 取 emitter<br>
+            ↓<br>
+            发 confirmation_required 事件给前端<br>
+            ↓<br>
+            前端弹窗 → 用户确认<br>
+            ↓<br>
+            调 /api/chat/execute-confirmed<br>
+            ↓<br>
+            ToolService.executeConfirmed（跳过敏感检查）
+        </div>
+
+        <hr>
+
+        <!-- 阶段 4 -->
+        <h2 id="stage4"><span class="stage-badge">阶段 4</span>前端 Agent 闭环</h2>
+
+        <h3 id="stage4-sse">4.1 SSE 解析（App.tsx）</h3>
+        <pre><code>const sendMessage = useCallback(async (text?: string) => {
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, conversationId: conversationIdRef.current }),
+        signal: controller.signal,  // 用于中断
+    })
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    let eventName = ''  // 必须在循环外面！
+
+    while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+
+        for (const line of lines) {
+            if (line.startsWith('event:')) {
+                eventName = line.substring(6).trim()
+            }
+            if (line.startsWith('data:')) {
+                const data = line.substring(5).trim()
+
+                if (data === '[DONE]') continue
+
+                if (eventName === 'chunk') {
+                    assistantContent += data  // 累加文本
+                } else if (eventName === 'tool_call') {
+                    toolCallsRef.current.push(JSON.parse(data))  // 记录工具调用
+                } else if (eventName === 'tool_result') {
+                    toolResultsRef.current.push(JSON.parse(data))  // 记录工具结果
+                } else if (eventName === 'confirmation_required') {
+                    setConfirmState(JSON.parse(data))  // 弹窗
+                }
+
+                eventName = ''  // 重置
+            }
+        }
+
+        // 更新 React state → 界面重新渲染
+        setMessages(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = {
+                role: 'assistant',
+                content: assistantContent,
+                toolCalls: toolCallsRef.current,
+                toolResults: toolResultsRef.current,
+            }
+            return updated
+        })
+    }
+}, [input, loading, toolMode])</code></pre>
+
+        <p><strong>关键点</strong>：</p>
+        <ul>
+            <li><code>eventName</code> 必须在 <code>while</code> 循环外面声明，因为 <code>event:</code> 和 <code>data:</code> 可能被拆在两个 TCP 包里</li>
+            <li>用 <code>useRef</code> 跟踪工具调用链路，避免 React 批处理导致丢失</li>
+            <li>先插入一条空的 assistant 消息，后续所有更新都改最后一条</li>
+        </ul>
+
+        <h3 id="stage4-timeline">4.2 Timeline 展示</h3>
+        <pre><code>{msg.toolCalls && msg.toolCalls.length > 0 && (
+    &lt;div className="tool-timeline"&gt;
+        {msg.toolCalls.map((tc, j) => (
+            &lt;div key={j} className="tool-item"&gt;
+                &lt;div className="tool-call"&gt;
+                    &lt;span className="tool-icon"&gt;🔧&lt;/span&gt;
+                    &lt;span className="tool-name"&gt;{getToolLabel(tc.name)}&lt;/span&gt;
+                    &lt;span className="tool-args"&gt;({tc.arguments})&lt;/span&gt;
+                &lt;/div&gt;
+                {msg.toolResults && msg.toolResults[j] && (
+                    &lt;div className="tool-result"&gt;
+                        &lt;span className="tool-arrow"&gt;↳&lt;/span&gt;
+                        &lt;span className="tool-result-text"&gt;{msg.toolResults[j].result}&lt;/span&gt;
+                    &lt;/div&gt;
+                )}
+            &lt;/div&gt;
+        ))}
+    &lt;/div&gt;
+)}</code></pre>
+
+        <h3 id="stage4-confirm">4.3 确认弹窗</h3>
+        <pre><code>{confirmState && (
+    &lt;div className="modal-overlay"&gt;
+        &lt;div className="modal"&gt;
+            &lt;div className="modal-header"&gt;⚠️ 敏感操作确认&lt;/div&gt;
+            &lt;div className="modal-body"&gt;
+                &lt;p&gt;{confirmState.message}&lt;/p&gt;
+                &lt;p className="modal-hint"&gt;此操作不可撤销，请确认是否执行。&lt;/p&gt;
+            &lt;/div&gt;
+            &lt;div className="modal-actions"&gt;
+                &lt;button className="modal-btn cancel" onClick={handleCancelConfirm}&gt;取消&lt;/button&gt;
+                &lt;button className="modal-btn confirm" onClick={handleConfirm}&gt;确认执行&lt;/button&gt;
+            &lt;/div&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+)}</code></pre>
+
+        <h3>4.4 中断和重试</h3>
+        <pre><code>// 中断
+const handleStop = () => {
+    abortRef.current?.abort()  // 触发 AbortController
+}
+
+// 重试
+const handleRetry = () => {
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
+    if (!lastUserMsg) return
+    setMessages(prev => {
+        const last = prev[prev.length - 1]
+        if (last?.isError) return prev.slice(0, -1)  // 删掉错误消息
+        return prev
+    })
+    sendMessage(lastUserMsg.content)  // 重新发送
+}</code></pre>
+
+        <hr>
+
+        <!-- 阶段 5 -->
+        <h2 id="stage5"><span class="stage-badge">阶段 5</span>MCP 协议</h2>
+
+        <h3>5.1 McpProperties（配置）</h3>
+        <pre><code>@Data
+@Component
+@ConfigurationProperties(prefix = "mcp.server")
+public class McpProperties {
+    private String url = "http://localhost:3190/mcp";  // MCP Server 地址
+    private boolean enabled = true;                     // 是否启用
+}</code></pre>
+
+        <h3 id="stage5-client">5.2 McpClientService（客户端）</h3>
+        <pre><code>@Slf4j
+@Service
+public class McpClientService {
+    private final McpProperties mcpProperties;
+    private McpSyncClient client;
+    private boolean available = false;
+
+    @PostConstruct
+    public void init() {
+        if (!mcpProperties.isEnabled()) return;
+
+        // 1. 创建传输层
+        var transport = HttpClientStreamableHttpTransport
+                .builder(mcpProperties.getUrl())
+                .build();
+
+        // 2. 创建同步客户端
+        client = McpClient.sync(transport)
+                .requestTimeout(Duration.ofSeconds(30))
+                .build();
+
+        // 3. 协议握手
+        client.initialize();
+
+        available = true;
+    }
+
+    public List&lt;Tool&gt; listTools() {
+        if (!available) return Collections.emptyList();
+        return client.listTools().tools();  // 工具发现
+    }
+
+    public String callTool(String toolName, Map&lt;String, Object&gt; args) {
+        if (!available) return "错误: MCP 客户端不可用";
+
+        CallToolResult result = client.callTool(new CallToolRequest(toolName, args));
+
+        // 提取文本内容
+        StringBuilder sb = new StringBuilder();
+        for (Content content : result.content()) {
+            if (content instanceof TextContent text) {
+                sb.append(text.text());
+            }
+        }
+        return sb.toString();
+    }
+
+    @PreDestroy
+    public void destroy() {
+        if (client != null) client.close();
+    }
+}</code></pre>
+
+        <p><strong>关键点</strong>：</p>
+        <ul>
+            <li><code>@PostConstruct</code> - 启动时自动连接 MCP Server</li>
+            <li><code>@PreDestroy</code> - 关闭时清理连接</li>
+            <li><code>McpClient.sync()</code> - 同步客户端（还有异步版本 <code>McpClient.async()</code>）</li>
+            <li><code>HttpClientStreamableHttpTransport</code> - HTTP 传输层（对应 MCP Server 的 Streamable HTTP）</li>
+        </ul>
+
+        <h3 id="stage5-register">5.3 MCP 工具注册（ToolRegistry.registerMcpTools）</h3>
+        <pre><code>private void registerMcpTools() {
+    if (!mcpClientService.isAvailable()) return;
+
+    List&lt;McpSchema.Tool&gt; mcpTools = mcpClientService.listTools();
+    for (McpSchema.Tool mcpTool : mcpTools) {
+        ToolDefinition definition = ToolDefinition.builder()
+                .name(mcpTool.name())
+                .description(mcpTool.description())
+                .parameters(objectMapper.valueToTree(mcpTool.inputSchema()))
+                .source(ToolDefinition.ToolSource.MCP)  // 标记为 MCP 工具
+                .mcpServer("mcp-server")
+                .build();
+
+        register(definition);
+    }
+}</code></pre>
+
+        <p><strong>关键点</strong>：</p>
+        <ul>
+            <li>MCP 工具和本地工具在注册表中是同一层级</li>
+            <li><code>source</code> 字段决定执行时走哪条路（本地 vs 远程）</li>
+        </ul>
+
+        <hr>
+
+        <!-- 阶段 6 -->
+        <h2 id="stage6"><span class="stage-badge">阶段 6</span>对话记忆</h2>
+
+        <h3 id="stage6-config">6.1 ChatMemoryConfig（记忆配置）</h3>
+        <pre><code>@Configuration
+public class ChatMemoryConfig {
+
+    @Bean
+    public ChatMemory chatMemory(ChatMemoryRepository chatMemoryRepository) {
+        return MessageWindowChatMemory.builder()
+                .chatMemoryRepository(chatMemoryRepository)  // 真正读写库的实现
+                .maxMessages(20)                               // 窗口策略：最多保留 20 条
+                .build();
+    }
+}</code></pre>
+
+        <p><strong>关键点</strong>：</p>
+        <ul>
+            <li><code>ChatMemory</code> - 记忆管理器，负责窗口策略（保留最近 N 条）</li>
+            <li><code>ChatMemoryRepository</code> - 记忆存储接口（读写库的抽象）</li>
+            <li><code>maxMessages(20)</code> - 窗口大小，超过 20 条会淘汰旧消息</li>
+        </ul>
+
+        <h3 id="stage6-repository">6.2 MybatisChatMemoryRepository（MyBatis 实现）</h3>
+        <pre><code>@Slf4j
+@Component
+@RequiredArgsConstructor
+public class MybatisChatMemoryRepository implements ChatMemoryRepository {
+
+    private final ChatMemoryMapper mapper;
+
+    @Override
+    public List&lt;Message&gt; findByConversationId(String conversationId) {
+        return mapper.findByConversationId(conversationId).stream()
+                .map(this::toMessage)  // 数据库行 → Spring AI Message
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void saveAll(String conversationId, List&lt;Message&gt; messages) {
+        mapper.deleteByConversationId(conversationId);  // 先删
+        for (int i = 0; i < messages.size(); i++) {
+            mapper.insert(toEntry(conversationId, i, messages.get(i)));  // 后插
+        }
+    }
+
+    // 数据库行 → Spring AI Message
+    private Message toMessage(ChatMemoryEntry entry) {
+        return switch (entry.getMessageType()) {
+            case "USER" -> new UserMessage(entry.getContent());
+            case "ASSISTANT" -> new AssistantMessage(entry.getContent());
+            case "SYSTEM" -> new SystemMessage(entry.getContent());
+            default -> null;
+        };
+    }
+
+    // Spring AI Message → 数据库行
+    private ChatMemoryEntry toEntry(String conversationId, int index, Message message) {
+        ChatMemoryEntry entry = new ChatMemoryEntry();
+        entry.setConversationId(conversationId);
+        entry.setMessageIndex(index);
+        entry.setMessageType(message.getMessageType().name());
+        entry.setContent(message.getText());
+        return entry;
+    }
+}</code></pre>
+
+        <p><strong>关键点</strong>：</p>
+        <ul>
+            <li><code>saveAll</code> 是<strong>整体替换</strong>语义，不是追加！窗口淘汰后旧消息会被删掉</li>
+            <li><code>@Transactional</code> - 先删后插在同一事务中，保证原子性</li>
+            <li><code>messageIndex</code> - 消息顺序，不能乱</li>
+        </ul>
+
+        <h3>6.3 ChatMemoryMapper（数据访问）</h3>
+        <pre><code>@Mapper
+public interface ChatMemoryMapper {
+    List&lt;String&gt; findConversationIds();
+    List&lt;ChatMemoryEntry&gt; findByConversationId(@Param("conversationId") String conversationId);
+    int insert(ChatMemoryEntry entry);
+    int deleteByConversationId(@Param("conversationId") String conversationId);
+}</code></pre>
+
+        <p><strong>对应 XML</strong>：</p>
+        <pre><code>&lt;select id="findByConversationId" resultType="com.assistant.ai.entity.ChatMemoryEntry"&gt;
+    SELECT id, conversation_id, message_index, message_type, content
+    FROM chat_memory
+    WHERE conversation_id = #{conversationId}
+    ORDER BY message_index ASC
+&lt;/select&gt;</code></pre>
+
+        <h3 id="stage6-advisor">6.4 MessageChatMemoryAdvisor（记忆 Advisor）</h3>
+        <pre><code>private MessageChatMemoryAdvisor memoryAdvisor(ChatRequest request) {
+    return MessageChatMemoryAdvisor.builder(chatMemory)
+            .conversationId(resolveConversationId(request))
+            .build();
+}</code></pre>
+
+        <p><strong>工作原理</strong>：</p>
+        <div class="flow">
+            请求前：从数据库查出该会话的历史消息，拼进 prompt<br>
+            响应后：把新消息（用户 + 模型回复）存回数据库
+        </div>
+
+        <p><strong>执行流程</strong>：</p>
+        <div class="flow">
+            用户发消息 → Advisor 查库（findByConversationId）→ 拼进 prompt → 调模型 → 模型回复<br>
+            → Advisor 存库（saveAll）→ 返回给前端
+        </div>
+
+        <h3>6.5 conversationId 设计</h3>
+        <pre><code>private String resolveConversationId(ChatRequest request) {
+    if (request.getConversationId() != null && !request.getConversationId().isBlank()) {
+        return request.getConversationId();
+    }
+    throw new IllegalArgumentException("conversationId 不能为空");
+}</code></pre>
+
+        <p><strong>前端</strong>：</p>
+        <pre><code>const conversationIdRef = useRef(crypto.randomUUID())  // 页面加载时生成一次
+
+// 新对话
+const handleNewConversation = async () => {
+    await fetch(`${API_BASE}/api/conversations/${oldId}`, { method: 'DELETE' })  // 删库
+    conversationIdRef.current = crypto.randomUUID()  // 换新 ID
+    setMessages([])
+}</code></pre>
+
+        <hr>
+
+        <!-- 总结 -->
+        <h2 id="summary">核心回路：完整 Agent Loop 流程</h2>
+        <div class="flow">
+            1. 前端发消息（POST /api/chat/tool-stream）<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            2. ChatController 接收，创建 SseEmitter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            3. ChatService.chatStreamWithTools()<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;- 构建 ChatClient<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;- 注册工具（ToolCallbackProvider.getToolCallbacks）<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;- 注册记忆 Advisor（MessageChatMemoryAdvisor）<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            4. Spring AI 调模型（带工具定义 + 历史记忆）<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            5. 模型返回：我要调用 query_orders<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            6. Spring AI 自动调 ToolCallbackProvider（Agent Loop）<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            7. ToolCallbackProvider 委托给 ToolService.execute()<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;- 白名单检查<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;- 敏感操作检查<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;- 参数校验<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;- 执行（本地 or MCP）<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            8. 工具结果返回给 Spring AI<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            9. Spring AI 再次调模型（带工具结果）<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            10. 模型生成最终回复<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+            11. 前端接收 SSE 事件，更新界面
+        </div>
+
+        <h2 id="classes">关键类职责总结</h2>
+        <table>
+            <tr>
+                <th>类</th>
+                <th>职责</th>
+            </tr>
+            <tr>
+                <td><code>ChatController</code></td>
+                <td>接收请求，创建 SseEmitter，委托给 ChatService</td>
+            </tr>
+            <tr>
+                <td><code>ChatService</code></td>
+                <td>构建 ChatClient，注册工具和 Advisor，启动 Agent Loop</td>
+            </tr>
+            <tr>
+                <td><code>ToolCallbackProvider</code></td>
+                <td>桥梁：Spring AI 调工具时走 ToolService</td>
+            </tr>
+            <tr>
+                <td><code>ToolRegistry</code></td>
+                <td>工具注册表，白名单，生成 tools JSON</td>
+            </tr>
+            <tr>
+                <td><code>ToolService</code></td>
+                <td>工具执行：安全检查 → 参数校验 → 路由执行</td>
+            </tr>
+            <tr>
+                <td><code>ToolValidator</code></td>
+                <td>参数校验：必填参数、类型检查</td>
+            </tr>
+            <tr>
+                <td><code>ToolResult</code></td>
+                <td>区分正常返回和需要确认</td>
+            </tr>
+            <tr>
+                <td><code>McpClientService</code></td>
+                <td>MCP 客户端：连接、工具发现、工具调用</td>
+            </tr>
+            <tr>
+                <td><code>ChatMemoryConfig</code></td>
+                <td>配置 ChatMemory（窗口策略）</td>
+            </tr>
+            <tr>
+                <td><code>MybatisChatMemoryRepository</code></td>
+                <td>ChatMemoryRepository 的 MyBatis 实现</td>
+            </tr>
+            <tr>
+                <td><code>ChatMemoryMapper</code></td>
+                <td>数据访问层</td>
+            </tr>
+        </table>
+
+        <hr>
+
+        <!-- Insights -->
+        <h2>💡 关键洞察</h2>
+
+        <div class="insight">
+            <div class="insight-title">1. 为什么需要 ToolCallbackProvider 这个「桥梁」？</div>
+            <p>Spring AI 的 Agent Loop 只认 <code>ToolCallback</code> 接口</p>
+            <p>你的安全机制（白名单、敏感检查、参数校验）在 <code>ToolService</code> 里</p>
+            <p><code>ToolCallbackProvider</code> 把两者串起来：Spring AI 调工具时，实际走的是 ToolService 的安全流程</p>
+        </div>
+
+        <div class="insight">
+            <div class="insight-title">2. 为什么 saveAll 是「整体替换」而不是「追加」？</div>
+            <p>窗口策略（maxMessages=20）会淘汰旧消息</p>
+            <p>如果用追加，淘汰的消息永远留在数据库里</p>
+            <p>整体替换保证数据库和内存中的消息列表一致</p>
+        </div>
+
+        <div class="insight">
+            <div class="insight-title">3. 为什么 eventName 必须在 while 循环外面声明？</div>
+            <p>SSE 的 <code>event:</code> 和 <code>data:</code> 可能被拆在两个 TCP 包里</p>
+            <p>如果在循环里面声明，每次 <code>read()</code> 都会重置，导致事件类型丢失</p>
+        </div>
+
+        <div class="insight">
+            <div class="insight-title">4. MCP 工具和本地工具为什么在注册表中是同一层级？</div>
+            <p>对模型来说，它不需要知道工具是本地的还是远程的</p>
+            <p>统一的工具列表让模型只关心「能调什么」，不关心「在哪执行」</p>
+            <p><code>source</code> 字段只在执行时起作用，决定走本地 switch 还是 MCP 协议</p>
+        </div>
+
+        <hr>
+
+        <p style="text-align: center; color: var(--text-light); font-size: 14px;">
+            📚 Agent 开发学习教程 - 阶段 0-6 完整教学<br>
+            生成时间：2026-07-28
+        </p>
+    </main>
+
+    <script>
+        // 平滑滚动
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href').substring(1);
+                const target = document.getElementById(targetId);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                }
+
+                // 更新激活状态
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // 滚动时更新激活状态
+        window.addEventListener('scroll', function() {
+            const sections = document.querySelectorAll('h2[id], h3[id]');
+            let current = '';
+
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (window.scrollY >= sectionTop - 100) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
