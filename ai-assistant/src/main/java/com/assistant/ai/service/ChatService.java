@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -50,15 +51,20 @@ public class ChatService {
      * 用户在前端确认后，调用此方法执行。
      * 不走 Agent Loop，直接执行工具并返回结果。
      */
-    public ChatResponse executeConfirmed(String toolName, String argsJson) {
-        try {
-            log.info("执行已确认的敏感操作: {}({})", toolName, argsJson);
-            ToolResult result = toolService.executeConfirmed(toolName, argsJson);
-            return ChatResponse.ok(result.getResult(), 0, 0);
-        } catch (Exception e) {
-            log.error("执行已确认操作失败", e);
-            return ChatResponse.fail("执行失败: " + e.getMessage());
+    public ChatResponse executeConfirmed(String toolName, String argsJson, String conversationId) {
+
+        if (conversationId == null || conversationId.isBlank()) {
+            throw new IllegalArgumentException("conversationId 不能为空");
         }
+        ToolResult result = toolService.executeConfirmed(toolName, argsJson);
+
+        try {
+            chatMemory.add(conversationId, new AssistantMessage(result.getResult()));
+        } catch (Exception e) {
+            log.error("确认结果写入记忆失败", e);
+        }
+
+        return ChatResponse.ok(result.getResult(), 0, 0);
     }
 
     // ========================================================================

@@ -22,8 +22,8 @@ import java.util.Map;
  * <p>
  * 执行路由：
  * - LOCAL 工具：本地 Java 方法执行
- *   - 基础工具：get_current_date、calculate、get_ip
- *   - 业务工具：query_orders、analyze_orders、cancel_order
+ * - 基础工具：get_current_date、calculate、get_ip
+ * - 业务工具：query_orders、analyze_orders、cancel_order
  * - MCP 工具：通过 MCP 协议调用远程服务（get_weather → mcp-server）
  * <p>
  * 安全机制：
@@ -102,7 +102,7 @@ public class ToolService {
 
     /**
      * 执行已确认的敏感操作 — 跳过敏感检查
-     *
+     * <p>
      * 用户在前端确认后，ChatService 调用这个方法执行。
      * 和 execute() 的区别：不检查 sensitive 标记。
      */
@@ -121,7 +121,7 @@ public class ToolService {
 
     /**
      * 执行 MCP 工具 — 通过 MCP 协议调用远程服务
-     *
+     * <p>
      * 将 argsJson（字符串）转为 Map，传给 McpClientService.callTool()。
      * MCP SDK 的 callTool 接受 Map<String, Object> 参数。
      */
@@ -129,7 +129,8 @@ public class ToolService {
         try {
             // 将 JSON 字符串转为 Map
             Map<String, Object> args = objectMapper.readValue(argsJson,
-                    new TypeReference<Map<String, Object>>() {});
+                    new TypeReference<Map<String, Object>>() {
+                    });
             return mcpClientService.callTool(toolName, args);
         } catch (Exception e) {
             log.error("MCP 工具参数解析失败: {}", toolName, e);
@@ -205,7 +206,7 @@ public class ToolService {
 
     /**
      * 取消订单 — 敏感写操作
-     *
+     * <p>
      * 注意：这个方法在正常流程中不会被调用，
      * 因为 execute() 方法在检测到 sensitive=true 时会直接拒绝。
      * 敏感操作需要走确认流程（前端弹窗 → 用户确认 → 后端执行）。

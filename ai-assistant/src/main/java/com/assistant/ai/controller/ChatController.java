@@ -53,7 +53,7 @@ public class ChatController {
      */
     @PostMapping("/chat/execute-confirmed")
     public ChatResponse executeConfirmed(@RequestBody ConfirmRequest request) {
-        return chatService.executeConfirmed(request.toolName(), request.argsJson());
+        return chatService.executeConfirmed(request.toolName(), request.argsJson(), request.conversationId());
     }
 
     /**
@@ -67,6 +67,6 @@ public class ChatController {
         return chatService.deleteByConversationId(id);
     }
 
-    public record ConfirmRequest(String toolName, String argsJson) {
+    public record ConfirmRequest(String toolName, String argsJson, String conversationId) {
     }
 }

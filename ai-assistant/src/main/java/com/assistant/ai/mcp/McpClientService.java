@@ -81,8 +81,7 @@ public class McpClientService {
 
             // 握手完成后，列出远程工具
             List<Tool> tools = listTools();
-            log.info("MCP Server 提供 {} 个工具: {}", tools.size(),
-                    tools.stream().map(Tool::name).toList());
+            log.info("MCP Server 提供 {} 个工具: {}", tools.size(), tools.stream().map(Tool::name).toList());
 
         } catch (Exception e) {
             log.warn("MCP Server 连接失败，MCP 工具将不可用: {}", e.getMessage());

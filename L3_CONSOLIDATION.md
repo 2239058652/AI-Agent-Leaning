@@ -36,6 +36,12 @@
 2. 可选：`practice/` 下做最小练习，不必推倒主仓  
 3. 卡住时 AI 给方向，不代写核心  
 
+### M4 实战修复
+
+- 当前缺漏：`execute-confirmed` 执行结果未写入 `chatMemory`，后续模型无法确认敏感操作是否成功。
+- 最小修复：确认请求携带 `conversationId`，执行后把确认和真实执行结果写入对应会话记忆。
+- 暂不扩展为恢复 Agent Loop 或严格 Agent Checkpoint。
+
 ### M1 必读文件
 
 - `ChatService`（`.advisors` / `memoryAdvisor`）

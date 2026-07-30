@@ -142,6 +142,7 @@ Agent-Learning/
 ## 技术债（简）
 
 - 确认文案硬编码在 `ToolCallbackProvider`
+- 敏感操作确认后的执行结果未写入 `chatMemory`，后续对话无法确认操作结果（L3 M4 修复）
 - MCP Resources/Prompts 未接入
 - 严格 Agent Checkpoint 未做
 - 部分测试可能与现构造不一致
