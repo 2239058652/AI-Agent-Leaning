@@ -9,15 +9,15 @@
 
 | 谁 | 读什么 |
 |---|---|
-| **你** | `HANDOFF.md`（到哪了）+ `L3_CONSOLIDATION.md`（练什么） |
-| **大模型** | `CLAUDE.md` → 再读 `HANDOFF.md`（巩固期再加 L3） |
+| **你** | `HANDOFF.md`（到哪了） |
+| **大模型** | `CLAUDE.md` → 再读 `HANDOFF.md` |
 | **大纲** | `agent-dev-learning-plan-v3.md`（阶段目标，不是每日进度） |
 | **历史** | `docs/archive/`（旁观者说、旧审查等，**勿当现状**） |
 
 新开对话可复制：
 
 ```
-先读 HANDOFF.md 和 L3_CONSOLIDATION.md，按恢复点续接，不要直接写大段代码。
+先读 HANDOFF.md，按恢复点续接，不要直接写大段代码。
 ```
 
 ---
@@ -27,7 +27,6 @@
 ```
 Agent-Learning/
 ├── HANDOFF.md                 # 进度权威
-├── L3_CONSOLIDATION.md        # 巩固清单
 ├── CLAUDE.md                  # AI 开场
 ├── agent-dev-learning-plan-v3.md
 ├── docs/archive/              # 历史文档
@@ -85,8 +84,9 @@ pnpm dev
 |---|---|
 | 0–5 | 功能核心 ✅ |
 | 6 核心 | Spring AI + 记忆落库 + 清空会话 ✅ |
-| **L3 巩固** | **进行中**（理解回路，再进 7） |
-| 7–10 | 待做 |
+| L3 巩固 | 已完成 ✅ |
+| **阶段7** | **准备开始：鉴权与权限边界** |
+| 8–10 | 待做 |
 
 ---
 

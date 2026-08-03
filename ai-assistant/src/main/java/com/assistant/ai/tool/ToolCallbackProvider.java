@@ -30,6 +30,7 @@ public class ToolCallbackProvider {
     private final ToolRegistry toolRegistry;
     private final ToolService toolService;
     private final ObjectMapper objectMapper;
+    private final PendingConfirmationStore pendingConfirmationStore;
 
     /**
      * 获取所有工具的 ToolCallback 列表
@@ -61,27 +62,37 @@ public class ToolCallbackProvider {
             ToolResult result = toolService.execute(toolDef.getName(), argsJson);
 
             if (result.isNeedsConfirmation()) {
-                log.info("[Spring AI 工具代理] {} 需要用户确认", toolDef.getName());
-                // 从 ToolContext 取出 ChatService 塞进来的 emitter
                 SseEmitter emitter = ctx != null
                         ? (SseEmitter) ctx.getContext().get("emitter")
                         : null;
-                if (emitter == null) {
-                    // 非流式调用场景没有 emitter，无法走前端确认流程
+
+                String conversationId = ctx != null
+                        ? (String) ctx.getContext().get("conversationId")
+                        : null;
+
+                if (emitter == null || conversationId == null || conversationId.isBlank()) {
                     return "此操作为敏感操作，当前调用方式不支持确认流程，已拒绝执行。";
                 }
-                // 给前端发 confirmation_required 事件，并决定返回给模型的文本
+
+                String confirmationId = pendingConfirmationStore.create(
+                        result.getToolName(),
+                        result.getArgsJson(),
+                        conversationId
+                );
+
                 try {
                     ObjectNode confirmEvent = objectMapper.createObjectNode();
-                    confirmEvent.put("toolName", result.getToolName());
-                    confirmEvent.put("argsJson", result.getArgsJson());
+                    confirmEvent.put("confirmationId", confirmationId);
                     confirmEvent.put("message", "操作需要确认：取消订单" + argsJson);
-                    emitter.send(SseEmitter.event().name("confirmation_required")
+
+                    emitter.send(SseEmitter.event()
+                            .name("confirmation_required")
                             .data(objectMapper.writeValueAsString(confirmEvent)));
                 } catch (Exception e) {
-                    return "通知前端失败： " + e.getMessage();
+                    pendingConfirmationStore.consume(confirmationId);
+                    return "通知前端失败：" + e.getMessage();
                 }
-                // 这段文本是给模型的指令：告诉它接下来该对用户说什么
+
                 return "操作尚未执行。系统已在界面上弹出确认框，请告知用户在弹窗中点击确认或取消，"
                         + "不要让用户用文字回复确认，也不要声称操作已完成。";
             }

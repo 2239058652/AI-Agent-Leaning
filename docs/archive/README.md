@@ -5,5 +5,6 @@
 **现状请读仓库根目录：**
 
 - `HANDOFF.md` — 进度与恢复点  
-- `L3_CONSOLIDATION.md` — 巩固任务  
 - `CLAUDE.md` — 给 AI 的开场指令  
+
+本目录同时保存已完成的 `L3_CONSOLIDATION.md`，作为巩固过程记录。

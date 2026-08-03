@@ -71,4 +71,11 @@ public class GlobalExceptionHandler {
         log.error("未知异常", ex);
         return ApiResponse.fail("INTERNAL_ERROR", "服务内部错误，请稍后重试");
     }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("请求参数错误: {}", ex.getMessage());
+        return ApiResponse.fail("INVALID_REQUEST", ex.getMessage());
+    }
 }

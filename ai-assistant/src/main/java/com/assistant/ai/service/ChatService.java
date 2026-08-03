@@ -3,6 +3,7 @@ package com.assistant.ai.service;
 import com.assistant.ai.config.LlmProperties;
 import com.assistant.ai.dto.ChatRequest;
 import com.assistant.ai.dto.ChatResponse;
+import com.assistant.ai.tool.PendingConfirmationStore;
 import com.assistant.ai.tool.ToolCallbackProvider;
 import com.assistant.ai.tool.ToolResult;
 import com.assistant.ai.tool.ToolService;
@@ -42,6 +43,7 @@ public class ChatService {
     private final ToolCallbackProvider toolCallbackProvider;
     private final ChatMemory chatMemory;
     private final ExecutorService executor = Executors.newFixedThreadPool(10);
+    private final PendingConfirmationStore pendingConfirmationStore;
 
     // ========================================================================
     // 执行已确认的敏感操作
@@ -51,15 +53,24 @@ public class ChatService {
      * 用户在前端确认后，调用此方法执行。
      * 不走 Agent Loop，直接执行工具并返回结果。
      */
-    public ChatResponse executeConfirmed(String toolName, String argsJson, String conversationId) {
+    public ChatResponse executeConfirmed(String confirmationId) {
+        PendingConfirmationStore.PendingConfirmation pending =
+                pendingConfirmationStore.consume(confirmationId);
 
-        if (conversationId == null || conversationId.isBlank()) {
-            throw new IllegalArgumentException("conversationId 不能为空");
+        if (pending == null) {
+            throw new IllegalArgumentException("确认请求不存在或已使用");
         }
-        ToolResult result = toolService.executeConfirmed(toolName, argsJson);
+
+        ToolResult result = toolService.executeConfirmed(
+                pending.toolName(),
+                pending.argsJson()
+        );
 
         try {
-            chatMemory.add(conversationId, new AssistantMessage(result.getResult()));
+            chatMemory.add(
+                    pending.conversationId(),
+                    new AssistantMessage(result.getResult())
+            );
         } catch (Exception e) {
             log.error("确认结果写入记忆失败", e);
         }
@@ -168,7 +179,7 @@ public class ChatService {
                 // Spring AI 不会把 toolContext 发给模型，只在本地工具执行时可见
                 reactor.core.publisher.Flux<String> flux = promptSpec
                         .toolCallbacks(toolCallbacks)
-                        .toolContext(java.util.Map.of("emitter", emitter))
+                        .toolContext(java.util.Map.of("emitter", emitter, "conversationId", resolveConversationId(request)))
                         .advisors(memoryAdvisor(request))
                         .stream()
                         .content();
@@ -224,6 +235,14 @@ public class ChatService {
         }
         // 强制要求会话 ID：宁可报错，不要暧昧 不报名字就不接待——强制调用方必须传 ID
         throw new IllegalArgumentException("conversationId 不能为空");
+    }
+
+    /**
+     * 取消
+     *
+     */
+    public void cancelConfirmation(String confirmationId) {
+        pendingConfirmationStore.consume(confirmationId);
     }
 
     public ChatResponse deleteByConversationId(@NotNull(message = "ID不能为空") String id) {

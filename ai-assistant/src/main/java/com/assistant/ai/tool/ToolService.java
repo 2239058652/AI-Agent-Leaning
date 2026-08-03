@@ -64,17 +64,17 @@ public class ToolService {
 
         ToolDefinition toolDef = toolRegistry.getTool(toolName).orElseThrow();
 
-        // 2. 敏感操作检查 — 返回"需要确认"，不是错误
-        if (toolDef.isSensitive()) {
-            log.info("敏感操作需要确认: {}，等待用户确认", toolName);
-            return ToolResult.confirmRequired(toolName, argsJson);
-        }
-
-        // 3. 参数校验
+        // 2. 参数校验
         ToolValidator.ValidationResult validation = toolValidator.validate(toolDef, argsJson);
         if (!validation.success()) {
             log.warn("参数校验失败: {}", validation.errors());
             return ToolResult.success("错误: 参数校验失败 — " + String.join("; ", validation.errors()));
+        }
+
+        // 3. 敏感操作检查 — 返回"需要确认"，不是错误
+        if (toolDef.isSensitive()) {
+            log.info("敏感操作需要确认: {}，等待用户确认", toolName);
+            return ToolResult.confirmRequired(toolName, argsJson);
         }
 
         // ---- 执行工具 ----

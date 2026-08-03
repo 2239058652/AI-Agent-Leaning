@@ -72,8 +72,7 @@ function getToolLabel(name: string): string {
 
 /** 确认弹窗状态 */
 interface ConfirmState {
-    toolName: string
-    argsJson: string
+    confirmationId: string
     message: string
 }
 
@@ -218,10 +217,9 @@ function App() {
                     if (eventName === 'confirmation_required') {
                         try {
                             const confirm = JSON.parse(eventData)
-                            console.log('收到确认请求，准备弹窗:', confirm.toolName)
+                            console.log('收到确认请求，准备弹窗:', confirm.confirmationId)
                             setConfirmState({
-                                toolName: confirm.toolName,
-                                argsJson: confirm.argsJson,
+                                confirmationId: confirm.confirmationId,
                                 message: confirm.message,
                             })
                         } catch { /* ignore parse error */
@@ -320,7 +318,7 @@ function App() {
     const handleConfirm = async () => {
         if (!confirmState) return
 
-        const {toolName, argsJson} = confirmState
+        const {confirmationId} = confirmState
         setConfirmState(null)
         setLoading(true)
 
@@ -328,18 +326,22 @@ function App() {
             const response = await fetch(`${API_BASE}/api/chat/execute-confirmed`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({toolName, argsJson, conversationId: conversationIdRef.current}),
+                body: JSON.stringify({confirmationId}),
             })
 
             const data = await response.json()
-            const resultText = data.content || '操作完成'
+
+            if (!response.ok || !data.success) {
+                const message = data.error?.message || data.error || '操作执行失败'
+                throw new Error(message)
+            }
+
+            const resultText = data.content
 
             // 添加确认结果到消息列表
             setMessages(prev => [...prev, {
                 role: 'assistant',
                 content: resultText,
-                toolCalls: [{name: toolName, arguments: argsJson}],
-                toolResults: [{name: toolName, result: resultText}],
             }])
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : String(error)
@@ -353,8 +355,32 @@ function App() {
         }
     }
 
-    const handleCancelConfirm = () => {
+    const handleCancelConfirm = async () => {
+        if (!confirmState) return
+
+        const {confirmationId} = confirmState
         setConfirmState(null)
+
+        try {
+            const response = await fetch(`${API_BASE}/api/chat/cancel-confirmation`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({confirmationId}),
+            })
+
+            if (!response.ok) {
+                throw new Error('取消确认失败')
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: message,
+                isError: true,
+            }])
+            return
+        }
+
         setMessages(prev => [...prev, {
             role: 'assistant',
             content: '操作已取消。',
