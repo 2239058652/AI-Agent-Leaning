@@ -2,13 +2,18 @@ package com.assistant.ai.controller;
 
 import com.assistant.ai.dto.ChatRequest;
 import com.assistant.ai.dto.ChatResponse;
+import com.assistant.ai.security.AgentAuthContext;
 import com.assistant.ai.service.ChatService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
@@ -40,9 +45,15 @@ public class ChatController {
      * 模型可以调用本地工具（天气、日期、计算器），执行后把结果告诉模型，模型再生成回复。
      */
     @PostMapping(value = "/chat/tool-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chatToolStream(@RequestBody ChatRequest request) {
+    public SseEmitter chatToolStream(@RequestBody ChatRequest request, Authentication authentication) {
         SseEmitter emitter = new SseEmitter(300_000L); // 工具调用可能需要更久
-        chatService.chatStreamWithTools(request, emitter);
+        AgentAuthContext authContext = new AgentAuthContext(
+                authentication.getName(),
+                authentication.getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .collect(Collectors.toUnmodifiableSet())
+        );
+        chatService.chatStreamWithTools(request, emitter, authContext);
         return emitter;
     }
 
@@ -53,8 +64,8 @@ public class ChatController {
      * 用户确认后调用这个接口执行。
      */
     @PostMapping("/chat/execute-confirmed")
-    public ChatResponse executeConfirmed(@Valid @RequestBody ConfirmRequest request) {
-        return chatService.executeConfirmed(request.confirmationId());
+    public ChatResponse executeConfirmed(@Valid @RequestBody ConfirmRequest request, Authentication authentication) {
+        return chatService.executeConfirmed(request.confirmationId(), authentication.getName());
     }
 
     /**
@@ -72,8 +83,8 @@ public class ChatController {
      * 取消
      */
     @PostMapping("/chat/cancel-confirmation")
-    public void cancelConfirmation(@Valid @RequestBody ConfirmRequest request) {
-        chatService.cancelConfirmation(request.confirmationId());
+    public void cancelConfirmation(@Valid @RequestBody ConfirmRequest request, Authentication authentication) {
+        chatService.cancelConfirmation(request.confirmationId(), authentication.getName());
     }
 
     public record ConfirmRequest(

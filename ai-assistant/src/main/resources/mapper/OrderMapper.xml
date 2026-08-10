@@ -4,11 +4,14 @@
 
     <!-- 查询订单列表 -->
     <select id="listOrders" resultType="com.assistant.ai.entity.Order">
-        SELECT id, order_no, product_name, amount, status, created_at, updated_at
+        SELECT id, order_no, user_id, product_name, amount, status, created_at, updated_at
         FROM orders
         <where>
             <if test="status != null and status != ''">
                 AND status = #{status}
+            </if>
+            <if test="!admin">
+                AND user_id = #{userId}
             </if>
         </where>
         ORDER BY created_at DESC
@@ -16,9 +19,12 @@
 
     <!-- 根据订单号查询 -->
     <select id="getByOrderNo" resultType="com.assistant.ai.entity.Order">
-        SELECT id, order_no, product_name, amount, status, created_at, updated_at
+        SELECT id, order_no, user_id, product_name, amount, status, created_at, updated_at
         FROM orders
         WHERE order_no = #{orderNo}
+        <if test="!admin">
+            AND user_id = #{userId}
+        </if>
     </select>
 
     <!-- 更新订单状态 -->
@@ -26,15 +32,22 @@
         UPDATE orders
         SET status = #{status}
         WHERE order_no = #{orderNo}
+        AND status = 'PENDING'
+        <if test="!admin">
+            AND user_id = #{userId}
+        </if>
     </update>
 
     <!-- 今日统计 -->
     <select id="todayStats" resultType="com.assistant.ai.entity.OrderStats">
-        SELECT COUNT(*)                                         AS order_count,
-               COALESCE(SUM(IF(status = 'PAID', amount, 0)), 0) AS paid_amount,
-               COALESCE(SUM(IF(status = 'PAID', 1, 0)), 0)      AS paid_count
+        SELECT COUNT(*) AS order_count,
+        COALESCE(SUM(IF(status = 'PAID', amount, 0)), 0) AS paid_amount,
+        COALESCE(SUM(IF(status = 'PAID', 1, 0)), 0) AS paid_count
         FROM orders
         WHERE DATE(created_at) = CURDATE()
+        <if test="!admin">
+            AND user_id = #{userId}
+        </if>
     </select>
 
 </mapper>

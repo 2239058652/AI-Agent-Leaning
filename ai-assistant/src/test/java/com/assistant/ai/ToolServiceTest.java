@@ -1,6 +1,7 @@
 package com.assistant.ai;
 
 import com.assistant.ai.mcp.McpClientService;
+import com.assistant.ai.security.AgentAuthContext;
 import com.assistant.ai.service.OrderService;
 import com.assistant.ai.tool.ToolRegistry;
 import com.assistant.ai.tool.ToolResult;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -24,6 +26,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class ToolServiceTest {
 
     private ToolService toolService;
+    private final AgentAuthContext userContext =
+            new AgentAuthContext("user1", Set.of("ROLE_USER"));
+    private final AgentAuthContext otherUserContext =
+            new AgentAuthContext("user2", Set.of("ROLE_USER"));
+    private final AgentAuthContext adminContext =
+            new AgentAuthContext("admin", Set.of("ROLE_ADMIN"));
 
     @BeforeEach
     void setUp() {
@@ -35,6 +43,8 @@ class ToolServiceTest {
 
         // Mock OrderService — 不连数据库
         OrderService mockOrderService = Mockito.mock(OrderService.class);
+        Mockito.when(mockOrderService.canAccessOrder("ORD001", userContext)).thenReturn(true);
+        Mockito.when(mockOrderService.canAccessOrder("ORD001", adminContext)).thenReturn(true);
 
         ToolRegistry registry = new ToolRegistry(objectMapper, mockMcp);
         registry.init();
@@ -45,7 +55,7 @@ class ToolServiceTest {
 
     @Test
     void getCurrentDateShouldReturnTodayString() {
-        ToolResult result = toolService.execute("get_current_date", "{}");
+        ToolResult result = toolService.execute("get_current_date", "{}", userContext);
         assertFalse(result.isNeedsConfirmation());
         assertTrue(result.getResult().contains("2026"), "应该包含年份");
         assertTrue(result.getResult().contains("星期"), "应该包含星期几");
@@ -53,26 +63,41 @@ class ToolServiceTest {
 
     @Test
     void calculateShouldReturn5ForTwoPlusThree() {
-        ToolResult result = toolService.execute("calculate", "{\"expression\":\"2+3\"}");
+        ToolResult result = toolService.execute("calculate", "{\"expression\":\"2+3\"}", userContext);
         assertTrue(result.getResult().contains("5"), "应该包含计算结果5");
     }
 
     @Test
     void calculateShouldReturnErrorForDivisionByZero() {
-        ToolResult result = toolService.execute("calculate", "{\"expression\":\"10/0\"}");
+        ToolResult result = toolService.execute("calculate", "{\"expression\":\"10/0\"}", userContext);
         assertTrue(result.getResult().contains("错误") || result.getResult().contains("除数"), "应该提示除数错误");
     }
 
     @Test
     void unknownToolShouldReturnError() {
-        ToolResult result = toolService.execute("unknown_tool", "{}");
+        ToolResult result = toolService.execute("unknown_tool", "{}", userContext);
         assertTrue(result.getResult().contains("错误") || result.getResult().contains("未知"), "应该提示未知工具");
     }
 
     @Test
     void sensitiveToolShouldRequireConfirmation() {
-        ToolResult result = toolService.execute("cancel_order", "{\"order_no\":\"ORD001\"}");
+        ToolResult result = toolService.execute("cancel_order", "{\"order_no\":\"ORD001\"}", userContext);
         assertTrue(result.isNeedsConfirmation(), "cancel_order 应该返回需要确认");
         assertEquals("cancel_order", result.getToolName());
+    }
+
+    @Test
+    void userShouldNotRequireConfirmationForAnotherUsersOrder() {
+        ToolResult result = toolService.execute("cancel_order", "{\"order_no\":\"ORD001\"}", otherUserContext);
+
+        assertFalse(result.isNeedsConfirmation(), "无权操作他人订单时不应该弹确认框");
+        assertTrue(result.getResult().contains("无权操作"));
+    }
+
+    @Test
+    void adminShouldRequireConfirmationForAnotherUsersOrder() {
+        ToolResult result = toolService.execute("cancel_order", "{\"order_no\":\"ORD001\"}", adminContext);
+
+        assertTrue(result.isNeedsConfirmation(), "管理员操作他人订单仍需要确认");
     }
 }

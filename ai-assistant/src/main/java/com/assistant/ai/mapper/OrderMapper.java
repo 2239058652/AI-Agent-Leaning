@@ -13,15 +13,37 @@ import java.util.List;
 @Mapper
 public interface OrderMapper {
 
-    /** 查询订单列表（可按状态筛选） */
-    List<Order> listOrders(@Param("status") String status);
+    /**
+     * 查询订单列表（可按状态筛选）
+     */
+    List<Order> listOrders(@Param("status") String status,
+                           @Param("userId") String userId,
+                           @Param("admin") boolean admin);
 
-    /** 根据订单号查询 */
-    Order getByOrderNo(@Param("orderNo") String orderNo);
+    /**
+     * 根据订单号查询
+     */
+    Order getByOrderNo(
+            @Param("orderNo") String orderNo,
+            @Param("userId") String userId,
+            @Param("admin") boolean admin
+    );
 
-    /** 更新订单状态 */
-    int updateStatus(@Param("orderNo") String orderNo, @Param("status") String status);
+    /**
+     * 更新订单状态
+     */
+    int updateStatus(
+            @Param("orderNo") String orderNo,
+            @Param("status") String status,
+            @Param("userId") String userId,
+            @Param("admin") boolean admin
+    );
 
-    /** 统计：今日订单数和成交额 */
-    OrderStats todayStats();
+    /**
+     * 统计：今日订单数和成交额
+     */
+    OrderStats todayStats(
+            @Param("userId") String userId,
+            @Param("admin") boolean admin
+    );
 }

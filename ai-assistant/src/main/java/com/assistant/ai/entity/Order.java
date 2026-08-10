@@ -1,6 +1,7 @@
 package com.assistant.ai.entity;
 
 import lombok.Data;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -14,6 +15,7 @@ public class Order {
     private String productName;
     private BigDecimal amount;
     private String status;      // PENDING / PAID / CANCELLED
+    private String userId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

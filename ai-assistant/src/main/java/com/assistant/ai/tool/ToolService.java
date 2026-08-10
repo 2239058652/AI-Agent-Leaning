@@ -1,7 +1,9 @@
 package com.assistant.ai.tool;
 
 import com.assistant.ai.mcp.McpClientService;
+import com.assistant.ai.security.AgentAuthContext;
 import com.assistant.ai.service.OrderService;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,7 +51,7 @@ public class ToolService {
      * @param argsJson 参数 JSON 字符串
      * @return 工具执行结果（可能是正常结果，也可能是需要确认）
      */
-    public ToolResult execute(String toolName, String argsJson) {
+    public ToolResult execute(String toolName, String argsJson, AgentAuthContext authContext) {
         log.info("========== 工具执行开始 ==========");
         log.info("工具名: {}", toolName);
         log.info("参数: {}", argsJson);
@@ -71,6 +73,20 @@ public class ToolService {
             return ToolResult.success("错误: 参数校验失败 — " + String.join("; ", validation.errors()));
         }
 
+        // 订单归属权限校验
+        if ("cancel_order".equals(toolName)) {
+            try {
+                JsonNode args = objectMapper.readTree(argsJson);
+                String orderNo = args.path("order_no").asText("");
+
+                if (!orderService.canAccessOrder(orderNo, authContext)) {
+                    return ToolResult.success("错误: 无权操作该订单");
+                }
+            } catch (JsonProcessingException e) {
+                return ToolResult.success("错误: 订单参数解析失败");
+            }
+        }
+
         // 3. 敏感操作检查 — 返回"需要确认"，不是错误
         if (toolDef.isSensitive()) {
             log.info("敏感操作需要确认: {}，等待用户确认", toolName);
@@ -88,9 +104,9 @@ public class ToolService {
                 case "get_current_date" -> executeGetCurrentDate();
                 case "calculate" -> executeCalculate(argsJson);
                 case "get_ip" -> executeGetIp();
-                case "query_orders" -> executeQueryOrders(argsJson);
-                case "analyze_orders" -> executeAnalyzeOrders();
-                case "cancel_order" -> executeCancelOrder(argsJson);
+                case "query_orders" -> executeQueryOrders(argsJson, authContext);
+                case "analyze_orders" -> executeAnalyzeOrders(authContext);
+                case "cancel_order" -> executeCancelOrder(argsJson, authContext);
                 default -> "错误: 未知本地工具 " + toolName;
             };
         }
@@ -106,12 +122,12 @@ public class ToolService {
      * 用户在前端确认后，ChatService 调用这个方法执行。
      * 和 execute() 的区别：不检查 sensitive 标记。
      */
-    public ToolResult executeConfirmed(String toolName, String argsJson) {
+    public ToolResult executeConfirmed(String toolName, String argsJson, AgentAuthContext authContext) {
         log.info("========== 执行已确认的敏感操作 ==========");
         log.info("工具名: {}，参数: {}", toolName, argsJson);
 
         String result = switch (toolName) {
-            case "cancel_order" -> executeCancelOrder(argsJson);
+            case "cancel_order" -> executeCancelOrder(argsJson, authContext);
             default -> "错误: 不支持的敏感操作 " + toolName;
         };
 
@@ -166,11 +182,11 @@ public class ToolService {
     /**
      * 查询订单列表
      */
-    private String executeQueryOrders(String argsJson) {
+    private String executeQueryOrders(String argsJson, AgentAuthContext authContext) {
         try {
             JsonNode args = objectMapper.readTree(argsJson);
             String status = args.path("status").asText(null);
-            var orders = orderService.queryOrders(status);
+            var orders = orderService.queryOrders(status, authContext);
 
             if (orders.isEmpty()) {
                 return status == null ? "暂无订单" : "没有状态为 " + status + " 的订单";
@@ -194,9 +210,9 @@ public class ToolService {
     /**
      * 今日订单统计
      */
-    private String executeAnalyzeOrders() {
+    private String executeAnalyzeOrders(AgentAuthContext authContext) {
         try {
-            var stats = orderService.todayStats();
+            var stats = orderService.todayStats(authContext);
             return String.format("今日订单统计：总订单 %d 单，已支付 %d 单，成交额 ¥%s",
                     stats.getOrderCount(), stats.getPaidCount(), stats.getPaidAmount());
         } catch (Exception e) {
@@ -211,11 +227,11 @@ public class ToolService {
      * 因为 execute() 方法在检测到 sensitive=true 时会直接拒绝。
      * 敏感操作需要走确认流程（前端弹窗 → 用户确认 → 后端执行）。
      */
-    private String executeCancelOrder(String argsJson) {
+    private String executeCancelOrder(String argsJson, AgentAuthContext authContext) {
         try {
             JsonNode args = objectMapper.readTree(argsJson);
             String orderNo = args.path("order_no").asText("");
-            return orderService.cancelOrder(orderNo);
+            return orderService.cancelOrder(orderNo, authContext);
         } catch (Exception e) {
             return "取消订单失败: " + e.getMessage();
         }

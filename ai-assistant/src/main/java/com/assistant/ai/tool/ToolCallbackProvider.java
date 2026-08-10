@@ -1,5 +1,6 @@
 package com.assistant.ai.tool;
 
+import com.assistant.ai.security.AgentAuthContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +53,8 @@ public class ToolCallbackProvider {
         // 工具执行逻辑：接收参数 Map，转成 JSON 字符串后委托给 ToolService
         BiFunction<Map<String, Object>, ToolContext, String> toolFunction = (args, ctx) -> {
             String argsJson;
+            AgentAuthContext authContext =
+                    (AgentAuthContext) ctx.getContext().get("authContext");
             try {
                 // Spring AI 传过来的是 Map，需要转回 JSON 字符串给 ToolService
                 argsJson = objectMapper.writeValueAsString(args);
@@ -59,16 +62,12 @@ public class ToolCallbackProvider {
                 return "参数序列化失败: " + e.getMessage();
             }
             log.info("[Spring AI 工具代理] 调用 {}({})", toolDef.getName(), argsJson);
-            ToolResult result = toolService.execute(toolDef.getName(), argsJson);
+            ToolResult result = toolService.execute(toolDef.getName(), argsJson, authContext);
 
             if (result.isNeedsConfirmation()) {
-                SseEmitter emitter = ctx != null
-                        ? (SseEmitter) ctx.getContext().get("emitter")
-                        : null;
+                SseEmitter emitter = (SseEmitter) ctx.getContext().get("emitter");
 
-                String conversationId = ctx != null
-                        ? (String) ctx.getContext().get("conversationId")
-                        : null;
+                String conversationId = (String) ctx.getContext().get("conversationId");
 
                 if (emitter == null || conversationId == null || conversationId.isBlank()) {
                     return "此操作为敏感操作，当前调用方式不支持确认流程，已拒绝执行。";
@@ -77,7 +76,8 @@ public class ToolCallbackProvider {
                 String confirmationId = pendingConfirmationStore.create(
                         result.getToolName(),
                         result.getArgsJson(),
-                        conversationId
+                        conversationId,
+                        authContext
                 );
 
                 try {
@@ -89,7 +89,7 @@ public class ToolCallbackProvider {
                             .name("confirmation_required")
                             .data(objectMapper.writeValueAsString(confirmEvent)));
                 } catch (Exception e) {
-                    pendingConfirmationStore.consume(confirmationId);
+                    pendingConfirmationStore.discard(confirmationId);
                     return "通知前端失败：" + e.getMessage();
                 }
 

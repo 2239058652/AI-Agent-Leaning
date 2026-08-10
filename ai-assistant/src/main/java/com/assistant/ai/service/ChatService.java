@@ -3,6 +3,7 @@ package com.assistant.ai.service;
 import com.assistant.ai.config.LlmProperties;
 import com.assistant.ai.dto.ChatRequest;
 import com.assistant.ai.dto.ChatResponse;
+import com.assistant.ai.security.AgentAuthContext;
 import com.assistant.ai.tool.PendingConfirmationStore;
 import com.assistant.ai.tool.ToolCallbackProvider;
 import com.assistant.ai.tool.ToolResult;
@@ -53,17 +54,18 @@ public class ChatService {
      * 用户在前端确认后，调用此方法执行。
      * 不走 Agent Loop，直接执行工具并返回结果。
      */
-    public ChatResponse executeConfirmed(String confirmationId) {
+    public ChatResponse executeConfirmed(String confirmationId, String userId) {
         PendingConfirmationStore.PendingConfirmation pending =
-                pendingConfirmationStore.consume(confirmationId);
+                pendingConfirmationStore.consume(confirmationId, userId);
 
         if (pending == null) {
-            throw new IllegalArgumentException("确认请求不存在或已使用");
+            throw new IllegalArgumentException("确认请求不存在、已使用或无权操作");
         }
 
         ToolResult result = toolService.executeConfirmed(
                 pending.toolName(),
-                pending.argsJson()
+                pending.argsJson(),
+                pending.authContext()
         );
 
         try {
@@ -160,7 +162,7 @@ public class ChatService {
     // 流式聊天（带工具 Agent Loop）
     // ========================================================================
 
-    public void chatStreamWithTools(ChatRequest request, SseEmitter emitter) {
+    public void chatStreamWithTools(ChatRequest request, SseEmitter emitter, AgentAuthContext authContext) {
         executor.execute(() -> {
             try {
                 log.info("带工具流式聊天(Spring AI): {}", request.getMessage());
@@ -179,7 +181,12 @@ public class ChatService {
                 // Spring AI 不会把 toolContext 发给模型，只在本地工具执行时可见
                 reactor.core.publisher.Flux<String> flux = promptSpec
                         .toolCallbacks(toolCallbacks)
-                        .toolContext(java.util.Map.of("emitter", emitter, "conversationId", resolveConversationId(request)))
+                        .toolContext(java.util.Map.of(
+                                        "emitter", emitter,
+                                        "conversationId", resolveConversationId(request),
+                                        "authContext", authContext
+                                )
+                        )
                         .advisors(memoryAdvisor(request))
                         .stream()
                         .content();
@@ -241,8 +248,13 @@ public class ChatService {
      * 取消
      *
      */
-    public void cancelConfirmation(String confirmationId) {
-        pendingConfirmationStore.consume(confirmationId);
+    public void cancelConfirmation(String confirmationId, String userId) {
+        PendingConfirmationStore.PendingConfirmation pending =
+                pendingConfirmationStore.consume(confirmationId, userId);
+
+        if (pending == null) {
+            throw new IllegalArgumentException("确认请求不存在、已使用或无权操作");
+        }
     }
 
     public ChatResponse deleteByConversationId(@NotNull(message = "ID不能为空") String id) {
