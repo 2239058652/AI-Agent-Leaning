@@ -35,3 +35,7 @@ mcp:
   server:
     url: http://localhost:3190/mcp
     enabled: true
+    token-url: http://localhost:3170/oauth2/token
+    client-id: ai-assistant
+    client-secret: ${MCP_CLIENT_SECRET:ai-assistant-secret}
+    scope: mcp.weather

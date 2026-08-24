@@ -12,6 +12,7 @@
     <description>Agent 开发学习项目</description>
 
     <modules>
+        <module>authorization-server</module>
         <module>ai-assistant</module>
         <module>mcp-server</module>
     </modules>

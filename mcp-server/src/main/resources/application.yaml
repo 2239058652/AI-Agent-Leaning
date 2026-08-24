@@ -4,3 +4,14 @@ server:
 spring:
   main:
     web-application-type: servlet
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:3170
+          jwk-set-uri: http://localhost:3170/oauth2/jwks
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.security.oauth2.server.resource: TRACE

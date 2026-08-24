@@ -26,17 +26,17 @@ public class ChatController {
      * 非流式聊天 — 一次性返回完整回复
      */
     @PostMapping("/chat")
-    public ChatResponse chat(@Valid @RequestBody ChatRequest request) {
-        return chatService.chat(request);
+    public ChatResponse chat(@Valid @RequestBody ChatRequest request, Authentication authentication) {
+        return chatService.chat(request, authentication.getName());
     }
 
     /**
      * 流式聊天 — 不带工具，纯文本对话
      */
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chatStream(@RequestBody ChatRequest request) {
+    public SseEmitter chatStream(@RequestBody ChatRequest request, Authentication authentication) {
         SseEmitter emitter = new SseEmitter(120_000L);
-        chatService.chatStream(request, emitter);
+        chatService.chatStream(request, emitter, authentication.getName());
         return emitter;
     }
 
@@ -74,9 +74,9 @@ public class ChatController {
      *
      */
     @DeleteMapping("/conversations/{id}")
-    public ChatResponse deleteById(@PathVariable("id") String id) {
+    public ChatResponse deleteById(@PathVariable("id") String id, Authentication authentication) {
         if (id == null || id.isBlank()) throw new IllegalArgumentException("conversationId 不能为空");
-        return chatService.deleteByConversationId(id);
+        return chatService.deleteByConversationId(id, authentication.getName());
     }
 
     /**

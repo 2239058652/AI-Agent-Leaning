@@ -1,0 +1,61 @@
+### 获取服务 Token
+POST http://localhost:3170/oauth2/token
+Authorization: Basic YWktYXNzaXN0YW50OmFpLWFzc2lzdGFudC1zZWNyZXQ=
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&scope=mcp.weather
+
+> {%
+    client.global.set("access_token", response.body.access_token);
+%}
+
+### 使用 Token 初始化 MCP 会话
+POST http://localhost:3190/mcp
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "idea-http-client",
+      "version": "1.0.0"
+    }
+  }
+}
+
+### 获取无 scope 的服务 Token
+POST http://localhost:3170/oauth2/token
+Authorization: Basic YWktYXNzaXN0YW50OmFpLWFzc2lzdGFudC1zZWNyZXQ=
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials
+
+> {%
+    client.global.set("no_scope_token", response.body.access_token);
+%}
+
+### 使用无 scope Token 初始化 MCP，会预期返回 403
+POST http://localhost:3190/mcp
+Authorization: Bearer {{no_scope_token}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "idea-http-client-no-scope",
+      "version": "1.0.0"
+    }
+  }
+}

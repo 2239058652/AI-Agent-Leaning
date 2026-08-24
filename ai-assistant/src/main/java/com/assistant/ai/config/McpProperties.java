@@ -23,4 +23,9 @@ public class McpProperties {
      * 是否启用 MCP 客户端
      */
     private boolean enabled = true;
+
+    private String tokenUrl;
+    private String clientId;
+    private String clientSecret;
+    private String scope;
 }

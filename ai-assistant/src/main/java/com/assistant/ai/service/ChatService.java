@@ -84,7 +84,7 @@ public class ChatService {
     // 非流式聊天
     // ========================================================================
 
-    public ChatResponse chat(ChatRequest request) {
+    public ChatResponse chat(ChatRequest request, String userId) {
         try {
             log.info("LLM 非流式请求(Spring AI): model={}", llmProperties.getModel());
 
@@ -94,7 +94,7 @@ public class ChatService {
                 promptSpec = promptSpec.system(request.getSystemPrompt());
             }
             promptSpec = promptSpec.user(request.getMessage());
-            promptSpec = promptSpec.advisors(memoryAdvisor(request));
+            promptSpec = promptSpec.advisors(memoryAdvisor(request, userId));
 
             String content = promptSpec.call().content();
             log.info("LLM 响应(Spring AI): content长度={}", content == null ? "null" : content.length());
@@ -114,7 +114,7 @@ public class ChatService {
     // 流式聊天（不带工具）
     // ========================================================================
 
-    public void chatStream(ChatRequest request, SseEmitter emitter) {
+    public void chatStream(ChatRequest request, SseEmitter emitter, String userId) {
         executor.execute(() -> {
             try {
                 log.info("流式聊天(Spring AI): {}", request.getMessage());
@@ -125,7 +125,7 @@ public class ChatService {
                     promptSpec = promptSpec.system(request.getSystemPrompt());
                 }
                 promptSpec = promptSpec.user(request.getMessage());
-                promptSpec = promptSpec.advisors(memoryAdvisor(request));
+                promptSpec = promptSpec.advisors(memoryAdvisor(request, userId));
 
                 reactor.core.publisher.Flux<String> flux = promptSpec.stream().content();
 
@@ -183,11 +183,11 @@ public class ChatService {
                         .toolCallbacks(toolCallbacks)
                         .toolContext(java.util.Map.of(
                                         "emitter", emitter,
-                                        "conversationId", resolveConversationId(request),
+                                        "conversationId", resolveConversationId(request.getConversationId(), authContext.userId()),
                                         "authContext", authContext
                                 )
                         )
-                        .advisors(memoryAdvisor(request))
+                        .advisors(memoryAdvisor(request, authContext.userId()))
                         .stream()
                         .content();
 
@@ -227,18 +227,18 @@ public class ChatService {
     /**
      * 构建对话记忆 Advisor：请求前把该会话的历史拼进 prompt，响应后把新消息存回去
      */
-    private MessageChatMemoryAdvisor memoryAdvisor(ChatRequest request) {
+    private MessageChatMemoryAdvisor memoryAdvisor(ChatRequest request, String userId) {
         return MessageChatMemoryAdvisor.builder(chatMemory)
-                .conversationId(resolveConversationId(request))
+                .conversationId(resolveConversationId(request.getConversationId(), userId))
                 .build();
     }
 
     /**
      * 决定本次请求归属哪个会话
      */
-    private String resolveConversationId(ChatRequest request) {
-        if (request.getConversationId() != null && !request.getConversationId().isBlank()) {
-            return request.getConversationId();
+    private String resolveConversationId(String conversationId, String userId) {
+        if (conversationId != null && !conversationId.isBlank()) {
+            return userId + ":" + conversationId;
         }
         // 强制要求会话 ID：宁可报错，不要暧昧 不报名字就不接待——强制调用方必须传 ID
         throw new IllegalArgumentException("conversationId 不能为空");
@@ -257,8 +257,8 @@ public class ChatService {
         }
     }
 
-    public ChatResponse deleteByConversationId(@NotNull(message = "ID不能为空") String id) {
-        chatMemory.clear(id);
+    public ChatResponse deleteByConversationId(@NotNull(message = "ID不能为空") String id, String userId) {
+        chatMemory.clear(resolveConversationId(id, userId));
         return ChatResponse.ok("会话已清空", 0, 0);
     }
 }

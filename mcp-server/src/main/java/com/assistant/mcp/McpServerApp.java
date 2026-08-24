@@ -1,12 +1,11 @@
 package com.assistant.mcp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper;
+import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
-import io.modelcontextprotocol.spec.McpSchema.TextContent;
 
 import java.util.List;
 import java.util.Map;
@@ -54,11 +53,11 @@ public class McpServerApp {
                 .capabilities(McpSchema.ServerCapabilities.builder()
                         .tools(true)
                         .build())
-                .tool(weatherTool, (exchange, args) -> {
+                .toolCall(weatherTool, (exchange, request) -> {
                     // 手动构建 JSON，避免 Jackson 编码问题
                     StringBuilder sb = new StringBuilder("{");
                     boolean first = true;
-                    for (var entry : args.entrySet()) {
+                    for (var entry : request.arguments().entrySet()) {
                         if (!first) sb.append(",");
                         sb.append("\"").append(entry.getKey()).append("\":");
                         if (entry.getValue() instanceof String s) {
@@ -70,10 +69,9 @@ public class McpServerApp {
                     }
                     sb.append("}");
                     String result = WeatherTool.execute(sb.toString());
-                    return new McpSchema.CallToolResult(
-                            List.of(new TextContent(result)),
-                            false
-                    );
+                    return McpSchema.CallToolResult.builder()
+                            .addTextContent(result)
+                            .build();
                 })
                 .build();
     }
