@@ -98,7 +98,7 @@ public class ToolService {
 
         // 根据工具来源路由：MCP 工具走远程调用，本地工具走 switch
         if (toolDef.getSource() == ToolDefinition.ToolSource.MCP) {
-            result = executeMcpTool(toolName, argsJson);
+            result = executeMcpTool(toolName, argsJson, authContext);
         } else {
             result = switch (toolName) {
                 case "get_current_date" -> executeGetCurrentDate();
@@ -141,13 +141,13 @@ public class ToolService {
      * 将 argsJson（字符串）转为 Map，传给 McpClientService.callTool()。
      * MCP SDK 的 callTool 接受 Map<String, Object> 参数。
      */
-    private String executeMcpTool(String toolName, String argsJson) {
+    private String executeMcpTool(String toolName, String argsJson, AgentAuthContext authContext) {
         try {
             // 将 JSON 字符串转为 Map
             Map<String, Object> args = objectMapper.readValue(argsJson,
                     new TypeReference<Map<String, Object>>() {
                     });
-            return mcpClientService.callTool(toolName, args);
+            return mcpClientService.callTool(toolName, args, authContext.accessToken());
         } catch (Exception e) {
             log.error("MCP 工具参数解析失败: {}", toolName, e);
             return "错误: MCP 工具参数解析失败 — " + e.getMessage();

@@ -8,13 +8,22 @@ spring:
     username: root
     password: Dingtong1998
     driver-class-name: com.mysql.cj.jdbc.Driver
+
   ai:
-    openai:
+    # 智谱 GLM 官方 Starter（spring-ai-starter-model-zhipuai）
+    # 官方模块自带 base-url=https://open.bigmodel.cn/api/paas（无需配置），
+    # 并将智谱扩展字段 reasoning_content 映射为消息的思考内容（流式逐块可读）。
+    zhipuai:
       api-key: ${API_MODEL_KEY}
-      base-url: https://api.longcat.chat/openai
       chat:
         options:
-          model: LongCat-2.0
+          model: glm-5.3-flash
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:3170
 
 # MyBatis 配置
 mybatis:
@@ -23,11 +32,11 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
 
-# LLM API 配置
+# LLM API 配置 —— 仅用于日志/展示（打印模型名），真正调用走 spring.ai.zhipuai.*
 llm:
   api-key: ${API_MODEL_KEY}
-  base-url: https://api.longcat.chat
-  model: LongCat-2.0
+  base-url: https://open.bigmodel.cn/api/paas
+  model: glm-5.3-flash
   timeout: 60
 
 # MCP 客户端配置

@@ -44,6 +44,7 @@ public class McpClientService {
     private final McpProperties mcpProperties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final ThreadLocal<String> requestUserToken = new ThreadLocal<>();
     private McpSyncClient client;
     private volatile AccessToken accessToken;
     /**
@@ -147,9 +148,15 @@ public class McpClientService {
             // 第1步：创建 HTTP 传输层
             var transport = HttpClientStreamableHttpTransport
                     .builder(mcpProperties.getUrl())
-                    .httpRequestCustomizer((requestBuilder, method, uri, body, context) ->
-                            requestBuilder.header("Authorization", "Bearer " + getValidAccessToken().value())
-                    )
+                    .httpRequestCustomizer((requestBuilder, method, uri, body, context) -> {
+                        String token = requestUserToken.get();
+
+                        if (token == null || token.isBlank()) {
+                            token = getValidAccessToken().value();
+                        }
+
+                        requestBuilder.header("Authorization", "Bearer " + token);
+                    })
                     .build();
 
             // 第2步：创建同步客户端
@@ -197,17 +204,24 @@ public class McpClientService {
      * @param args     参数（key-value 形式）
      * @return 工具执行结果文本
      */
-    public String callTool(String toolName, Map<String, Object> args) {
+    public String callTool(String toolName, Map<String, Object> args, String userAccessToken) {
         if (!available || client == null) {
             return "错误: MCP 客户端不可用";
+        }
+
+        if (userAccessToken == null || userAccessToken.isBlank()) {
+            return "错误: 当前请求缺少用户 Token";
         }
 
         try {
             log.info("调用 MCP 工具: {}({})", toolName, args);
 
-            CallToolResult result = client.callTool(new CallToolRequest(toolName, args));
+            requestUserToken.set(userAccessToken);
 
-            // MCP 工具返回的是 Content 列表，提取文本内容
+            CallToolResult result = client.callTool(
+                    new CallToolRequest(toolName, args)
+            );
+
             StringBuilder sb = new StringBuilder();
             for (Content content : result.content()) {
                 if (content instanceof TextContent text) {
@@ -222,6 +236,8 @@ public class McpClientService {
         } catch (Exception e) {
             log.error("调用 MCP 工具失败: {}", toolName, e);
             return "错误: MCP 工具调用失败 — " + e.getMessage();
+        } finally {
+            requestUserToken.remove();
         }
     }
 

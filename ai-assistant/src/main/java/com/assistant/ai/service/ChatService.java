@@ -15,6 +15,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.zhipuai.ZhiPuAiAssistantMessage;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -94,7 +95,11 @@ public class ChatService {
                 promptSpec = promptSpec.system(request.getSystemPrompt());
             }
             promptSpec = promptSpec.user(request.getMessage());
-            promptSpec = promptSpec.advisors(memoryAdvisor(request, userId));
+            // 1.1.8：会话 ID 改从请求上下文传入（键见 ChatMemory.CONVERSATION_ID），
+            // Advisor 本身不再持有会话 ID；param() 把值放进 Advisor 可见的上下文
+            promptSpec = promptSpec.advisors(spec -> spec
+                    .advisors(memoryAdvisor())
+                    .param(ChatMemory.CONVERSATION_ID, resolveConversationId(request.getConversationId(), userId)));
 
             String content = promptSpec.call().content();
             log.info("LLM 响应(Spring AI): content长度={}", content == null ? "null" : content.length());
@@ -125,18 +130,19 @@ public class ChatService {
                     promptSpec = promptSpec.system(request.getSystemPrompt());
                 }
                 promptSpec = promptSpec.user(request.getMessage());
-                promptSpec = promptSpec.advisors(memoryAdvisor(request, userId));
+                // 1.1.8：会话 ID 改从请求上下文传入（键见 ChatMemory.CONVERSATION_ID）
+                promptSpec = promptSpec.advisors(spec -> spec
+                        .advisors(memoryAdvisor())
+                        .param(ChatMemory.CONVERSATION_ID, resolveConversationId(request.getConversationId(), userId)));
 
-                reactor.core.publisher.Flux<String> flux = promptSpec.stream().content();
+                // 用 chatResponse() 而不是 content()：
+                // 每个流式块同时携带「可见文本（getText）」和「思考内容（智谱扩展字段）」，
+                // 由 forwardChatResponseEvents 拆成 chunk / reasoning 两个 SSE 事件分别转发
+                // 注：全限定名，避免与项目 DTO ChatResponse 冲突
+                reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> flux = promptSpec.stream().chatResponse();
 
                 flux.subscribe(
-                        chunk -> {
-                            try {
-                                emitter.send(SseEmitter.event().name("chunk").data(chunk));
-                            } catch (Exception e) {
-                                log.error("发送 chunk 失败", e);
-                            }
-                        },
+                        response -> forwardChatResponseEvents(response, emitter),
                         error -> {
                             log.error("流式聊天(Spring AI)异常", error);
                             emitter.completeWithError(error);
@@ -177,28 +183,29 @@ public class ChatService {
                 }
                 promptSpec = promptSpec.user(request.getMessage());
 
+                // 会话 ID 只解析一次：Advisor 上下文 与 工具上下文（确认弹窗）共用
+                String conversationId = resolveConversationId(request.getConversationId(), authContext.userId());
+
                 // 通过 ToolContext 把 emitter 传给工具回调（带外数据通道）
                 // Spring AI 不会把 toolContext 发给模型，只在本地工具执行时可见
-                reactor.core.publisher.Flux<String> flux = promptSpec
+                reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> flux = promptSpec
                         .toolCallbacks(toolCallbacks)
                         .toolContext(java.util.Map.of(
                                         "emitter", emitter,
-                                        "conversationId", resolveConversationId(request.getConversationId(), authContext.userId()),
+                                        "conversationId", conversationId,
                                         "authContext", authContext
                                 )
                         )
-                        .advisors(memoryAdvisor(request, authContext.userId()))
+                        // 1.1.8：会话 ID 改从请求上下文传入（键见 ChatMemory.CONVERSATION_ID）
+                        .advisors(spec -> spec
+                                .advisors(memoryAdvisor())
+                                .param(ChatMemory.CONVERSATION_ID, conversationId))
                         .stream()
-                        .content();
+                        // 同上：chatResponse() 才能同时拿到文本与思考内容
+                        .chatResponse();
 
                 flux.subscribe(
-                        chunk -> {
-                            try {
-                                emitter.send(SseEmitter.event().name("chunk").data(chunk));
-                            } catch (Exception e) {
-                                log.error("发送 chunk 失败", e);
-                            }
-                        },
+                        response -> forwardChatResponseEvents(response, emitter),
                         error -> {
                             log.error("带工具流式聊天(Spring AI)异常", error);
                             emitter.completeWithError(error);
@@ -221,16 +228,51 @@ public class ChatService {
     }
 
     // ========================================================================
+    // 流式 SSE 转发
+    // ========================================================================
+
+    /**
+     * 把一个流式 ChatResponse 块拆成 SSE 事件发给前端。
+     * <p>
+     * 输入：模型的某一个流式块（可能只有文本、只有思考、两者都有或都没有）。
+     * 输出：0~2 个 SSE 事件——可见文本 → event: chunk；思考内容 → event: reasoning。
+     * <p>
+     * 厂商隔离点：思考内容只有智谱消息（ZhiPuAiAssistantMessage）才有；
+     * 将来换厂商只改这一处（或返回 null 即关闭思考显示），其余代码不感知。
+     */
+    private void forwardChatResponseEvents(org.springframework.ai.chat.model.ChatResponse response, SseEmitter emitter) {
+        var result = response.getResult();
+        if (result == null) {
+            return;
+        }
+        var output = result.getOutput();
+        String text = output.getText();
+        String reasoning = (output instanceof ZhiPuAiAssistantMessage zm) ? zm.getReasoningContent() : null;
+        try {
+            if (text != null && !text.isEmpty()) {
+                emitter.send(SseEmitter.event().name("chunk").data(text));
+            }
+            if (reasoning != null && !reasoning.isEmpty()) {
+                emitter.send(SseEmitter.event().name("reasoning").data(reasoning));
+            }
+        } catch (Exception e) {
+            log.error("发送 SSE 事件失败", e);
+        }
+    }
+
+    // ========================================================================
     // 对话记忆
     // ========================================================================
 
     /**
-     * 构建对话记忆 Advisor：请求前把该会话的历史拼进 prompt，响应后把新消息存回去
+     * 构建对话记忆 Advisor：请求前把该会话的历史拼进 prompt，响应后把新消息存回去。
+     * <p>
+     * 注意：1.1.8 起 Builder 删除了 conversationId()，会话 ID 改由请求上下文的
+     * {@link ChatMemory#CONVERSATION_ID} 键提供（缺失会断言报错），
+     * 所以调用处必须与 advisors(spec -> spec.param(...)) 成对使用。
      */
-    private MessageChatMemoryAdvisor memoryAdvisor(ChatRequest request, String userId) {
-        return MessageChatMemoryAdvisor.builder(chatMemory)
-                .conversationId(resolveConversationId(request.getConversationId(), userId))
-                .build();
+    private MessageChatMemoryAdvisor memoryAdvisor() {
+        return MessageChatMemoryAdvisor.builder(chatMemory).build();
     }
 
     /**

@@ -31,8 +31,59 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  width: 100%;
   max-width: 900px;
   margin: 0 auto;
+}
+
+.auth-page {
+  align-items: center;
+  justify-content: center;
+  max-width: none;
+  background: var(--bg-primary);
+}
+
+.auth-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: min(360px, calc(100% - 40px));
+  padding: 40px 32px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.auth-panel h1 {
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.auth-panel button {
+  width: 100%;
+  padding: 10px 16px;
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.auth-panel button:hover {
+  background: var(--accent-hover);
+}
+
+.auth-panel p {
+  width: 100%;
+  color: #ff8f8f;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 /* Header */
@@ -61,6 +112,10 @@ body {
   color: var(--text-primary);
   border-color: var(--accent);
   background: rgba(108, 92, 231, 0.08);
+}
+
+.logout-btn {
+  margin-left: 0;
 }
 
 .tool-toggle {
@@ -604,4 +659,27 @@ body {
 
 .modal-btn.confirm:hover {
   background: #c0392b;
+}
+
+/* 思考过程折叠块 — 智谱 reasoning_content 展示（灰色小字，默认收起的 details） */
+.reasoning-block {
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.reasoning-block summary {
+  cursor: pointer;
+  color: #888;
+  user-select: none;
+}
+
+.reasoning-content {
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: var(--bg-tertiary, #2a2a2a);
+  border-radius: 8px;
+  color: #999;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

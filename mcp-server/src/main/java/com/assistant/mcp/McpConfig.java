@@ -2,6 +2,7 @@ package com.assistant.mcp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpSyncServer;
@@ -11,6 +12,8 @@ import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +38,19 @@ public class McpConfig {
                 .jsonMapper(jsonMapper)
                 .mcpEndpoint("/mcp")       // MCP 端点路径
                 .keepAliveInterval(java.time.Duration.ofSeconds(30))
+                .contextExtractor(request -> {
+                    var principal = request.getUserPrincipal();
+                    if (principal instanceof Authentication auth) {
+
+                        return McpTransportContext.create(Map.of(
+                                "userId", auth.getName(),
+                                "roles", auth.getAuthorities().stream()
+                                        .map(GrantedAuthority::getAuthority).toList()
+                        ));
+                    }
+
+                    return McpTransportContext.EMPTY;
+                })
                 .build();
     }
 
@@ -48,6 +64,18 @@ public class McpConfig {
                         .tools(true)
                         .build())
                 .toolCall(weatherTool(), (exchange, request) -> {
+
+                    List<String> roles = exchange.transportContext().get("roles") instanceof List<?> list
+                            ? list.stream().map(String::valueOf).toList()
+                            : List.of();
+
+                    if (!roles.contains("ROLE_ADMIN")) {
+                        return CallToolResult.builder()
+                                .isError(true)
+                                .addTextContent("权限不足：get_weather 需要 ADMIN 角色")
+                                .build();
+                    }
+
                     String argsJson = toJson(objectMapper, request.arguments());
                     String result = WeatherTool.execute(argsJson);
                     return CallToolResult.builder()

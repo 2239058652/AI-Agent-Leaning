@@ -32,7 +32,7 @@ curl -N -X POST http://localhost:3180/api/chat/tool-stream \
 
 ## 技术栈
 
-Spring Boot 3.5 / Java 17 / Spring AI 1.0 / MyBatis / MySQL / LongCat API
+Spring Boot 3.5 / Java 17 / Spring AI 1.1.8 / MyBatis / MySQL / 智谱 GLM（`spring-ai-starter-model-zhipuai`，`glm-5.3-flash`）
 
 ## 运行
 

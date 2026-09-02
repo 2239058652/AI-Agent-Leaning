@@ -17,10 +17,12 @@ interface ToolResult {
     result: string
 }
 
-/** 聊天消息 — 支持文本 + 工具调用链路 */
+/** 聊天消息 — 支持文本 + 工具调用链路 + 思考过程 */
 interface Message {
     role: 'user' | 'assistant'
     content: string
+    /** 模型思考过程（智谱 reasoning_content）。仅思考型模型有，非智谱时为空字符串 */
+    reasoning?: string
     toolCalls?: ToolCall[]
     toolResults?: ToolResult[]
     /** 标记这条消息是否因错误产生 */
@@ -31,7 +33,12 @@ interface Message {
 // 常量
 // ============================================================================
 
-const API_BASE = 'http://localhost:3180'
+const API_BASE = ''
+const AUTH_BASE = '/auth'
+const REDIRECT_URI = 'http://localhost:3100/callback'
+const ACCESS_TOKEN_KEY = 'access_token'
+const ID_TOKEN_KEY = 'id_token'
+const CODE_VERIFIER_KEY = 'code_verifier'
 
 const SUGGESTIONS = [
     '用一句话介绍你自己',
@@ -66,6 +73,28 @@ function getToolLabel(name: string): string {
     return TOOL_LABELS[name] || name
 }
 
+function base64UrlEncode(bytes: Uint8Array): string {
+    return btoa(String.fromCharCode(...bytes))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+}
+
+async function createPkcePair() {
+    const verifier = base64UrlEncode(
+        crypto.getRandomValues(new Uint8Array(32))
+    )
+    const digest = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(verifier)
+    )
+
+    return {
+        verifier,
+        challenge: base64UrlEncode(new Uint8Array(digest)),
+    }
+}
+
 // ============================================================================
 // 主组件
 // ============================================================================
@@ -77,6 +106,11 @@ interface ConfirmState {
 }
 
 function App() {
+    const [accessToken, setAccessToken] = useState(
+        localStorage.getItem(ACCESS_TOKEN_KEY)
+    )
+    const [authLoading, setAuthLoading] = useState(false)
+    const [authError, setAuthError] = useState<string | null>(null)
     const [messages, setMessages] = useState<Message[]>([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
@@ -86,8 +120,142 @@ function App() {
     const abortRef = useRef<AbortController | null>(null)
     const toolCallsRef = useRef<ToolCall[]>([])
     const toolResultsRef = useRef<ToolResult[]>([])
+    // 思考过程累积器：与 toolCallsRef 同样用 ref 跟踪（避免 React 批处理丢数据），
+    // SSE 的 reasoning 事件逐块累加，随消息一起渲染
+    const reasoningRef = useRef('')
     // 会话 ID：页面加载时生成一次，本页所有消息属于同一会话（刷新即开新会话）
     const conversationIdRef = useRef(crypto.randomUUID())
+
+    const startLogin = async () => {
+        setAuthError(null)
+        const {verifier, challenge} = await createPkcePair()
+        sessionStorage.setItem(CODE_VERIFIER_KEY, verifier)
+
+        const state = crypto.randomUUID()
+        sessionStorage.setItem('oauth_state', state)
+
+        const params = new URLSearchParams({
+            response_type: 'code',
+            client_id: 'frontend',
+            redirect_uri: REDIRECT_URI,
+            scope: 'openid profile mcp.weather',
+            state,
+            code_challenge: challenge,
+            code_challenge_method: 'S256',
+            prompt: 'login',
+        })
+
+        window.location.href = `${AUTH_BASE}/oauth2/authorize?${params}`
+    }
+
+    useEffect(() => {
+        const storedToken = localStorage.getItem(ACCESS_TOKEN_KEY)
+        if (storedToken) {
+            try {
+                const payload = storedToken.split('.')[1]
+                const claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+                if (typeof claims.exp === 'number' && claims.exp * 1000 <= Date.now()) {
+                    localStorage.removeItem(ACCESS_TOKEN_KEY)
+                    setAccessToken(null)
+                }
+            } catch {
+                localStorage.removeItem(ACCESS_TOKEN_KEY)
+                setAccessToken(null)
+            }
+        }
+
+        const params = new URLSearchParams(window.location.search)
+        const code = params.get('code')
+        const error = params.get('error')
+        const errorDescription = params.get('error_description')
+        const returnedState = params.get('state')
+        const savedState = sessionStorage.getItem('oauth_state')
+
+        if (error) {
+            setAuthError(errorDescription || `OAuth 登录失败: ${error}`)
+            window.history.replaceState({}, '', '/')
+            return
+        }
+
+        if (!code) return
+
+        if (!returnedState || returnedState !== savedState) {
+            setAuthError('OAuth state 校验失败，请重新登录')
+            return
+        }
+
+        const verifier = sessionStorage.getItem(CODE_VERIFIER_KEY)
+        if (!verifier) {
+            setAuthError('缺少 PKCE code_verifier，请重新登录')
+            return
+        }
+
+        const exchangeCode = async () => {
+            setAuthLoading(true)
+            try {
+                const body = new URLSearchParams({
+                    grant_type: 'authorization_code',
+                    client_id: 'frontend',
+                    redirect_uri: REDIRECT_URI,
+                    code,
+                    code_verifier: verifier,
+                })
+
+                const response = await fetch(`${AUTH_BASE}/oauth2/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: body.toString(),
+                })
+
+                if (!response.ok) {
+                    throw new Error(`Token 请求失败: HTTP ${response.status}`)
+                }
+
+                const data = await response.json()
+                localStorage.setItem(ACCESS_TOKEN_KEY, data.access_token)
+                if (data.id_token) {
+                    localStorage.setItem(ID_TOKEN_KEY, data.id_token)
+                }
+                sessionStorage.removeItem(CODE_VERIFIER_KEY)
+                sessionStorage.removeItem('oauth_state')
+                window.history.replaceState({}, '', '/')
+                setAccessToken(data.access_token)
+            } catch (error) {
+                setAuthError(error instanceof Error ? error.message : '登录失败')
+            } finally {
+                setAuthLoading(false)
+            }
+        }
+
+        void exchangeCode()
+    }, [])
+
+    const authHeaders = (): HeadersInit => ({
+        'Content-Type': 'application/json',
+        ...(accessToken ? {Authorization: `Bearer ${accessToken}`} : {}),
+    })
+
+    const logout = () => {
+        const idToken = localStorage.getItem(ID_TOKEN_KEY)
+        localStorage.removeItem(ACCESS_TOKEN_KEY)
+        localStorage.removeItem(ID_TOKEN_KEY)
+        sessionStorage.removeItem(CODE_VERIFIER_KEY)
+        sessionStorage.removeItem('oauth_state')
+        setAccessToken(null)
+        setMessages([])
+        setConfirmState(null)
+
+        if (idToken) {
+            const params = new URLSearchParams({
+                id_token_hint: idToken,
+                post_logout_redirect_uri: 'http://localhost:3100',
+                client_id: 'frontend',
+            })
+            window.location.href = `${AUTH_BASE}/connect/logout?${params}`
+        }
+    }
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({behavior: 'smooth'})
@@ -110,6 +278,21 @@ function App() {
         setInput('')
         setLoading(true)
 
+        if (!accessToken) {
+            setAuthError('请先登录')
+            return
+        }
+
+        // 先插入一条空的 assistant 消息（不等 SSE 建立——思考型模型可能很久才出第一个事件），
+        // 让"思考中…"占位气泡立即出现；后续所有更新都改最后一条
+        setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: '',
+            reasoning: '',
+            toolCalls: [],
+            toolResults: [],
+        }])
+
         const endpoint = toolMode
             ? `${API_BASE}/api/chat/tool-stream`
             : `${API_BASE}/api/chat/stream`
@@ -120,7 +303,7 @@ function App() {
         try {
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: authHeaders(),
                 body: JSON.stringify({message: msg, conversationId: conversationIdRef.current}),
                 signal: controller.signal,
             })
@@ -135,22 +318,96 @@ function App() {
             const decoder = new TextDecoder()
             let assistantContent = ''
             let buffer = ''
-            // 工具调用链路：用 ref 跟踪，避免 React 批处理导致丢失
+            // 工具调用链路/思考过程：用 ref 跟踪，避免 React 批处理导致丢失
             toolCallsRef.current = []
             toolResultsRef.current = []
+            reasoningRef.current = ''
 
-            // 先插入一条空的 assistant 消息，后续所有更新都改最后一条
-            setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: '',
-                toolCalls: [],
-                toolResults: [],
-            }])
-
-            // eventName 必须在 while 循环外面声明！
-            // 因为 event: 和 data: 可能被拆在两个 TCP 包里到达。
-            // 如果写在 for 循环里面，每次 read() 都会重置，导致类型丢失。
+            // SSE 帧解析：一个帧 = 若干 event:/data: 行 + 空行结束。
+            // event:/data: 可能被拆在两个 TCP 包里到达，所以帧状态在 while 外累积。
+            // Spring SseEmitter 的 data: 后不带空格 → slice(5) 必须原样保留
+            // （之前 trim() 吃掉块边界空格 → 英文单词粘连的根因）；
+            // 块内换行会被 Spring 拆成多个 data: 行，按 SSE 规范用 \n 连接还原。
             let eventName = ''
+            let dataLines: string[] = []
+
+            const dispatch = () => {
+                if (dataLines.length === 0) {
+                    eventName = ''
+                    return
+                }
+                const eventData = dataLines.join('\n')
+                dataLines = []
+
+                console.log(`收到事件类型: ${eventName || 'chunk'}`)
+
+                // 结束标记
+                if (eventData === '[DONE]') {
+                    console.log('收到 [DONE]，本轮对话结束')
+                    eventName = ''
+                    return
+                }
+
+                // 工具调用事件（画 Timeline）
+                if (eventName === 'tool_call') {
+                    try {
+                        const tc = JSON.parse(eventData) as ToolCall
+                        toolCallsRef.current = [...toolCallsRef.current, tc]
+                        console.log('收到工具调用:', tc.name)
+                    } catch { /* ignore parse error */
+                    }
+                    eventName = ''
+                    return
+                }
+
+                // 工具结果事件
+                if (eventName === 'tool_result') {
+                    try {
+                        const tr = JSON.parse(eventData) as ToolResult
+                        toolResultsRef.current = [...toolResultsRef.current, tr]
+                        console.log('收到工具结果:', tr.name)
+                    } catch { /* ignore parse error */
+                    }
+                    eventName = ''
+                    return
+                }
+
+                // 敏感操作确认事件 → 弹窗
+                if (eventName === 'confirmation_required') {
+                    try {
+                        const confirm = JSON.parse(eventData)
+                        console.log('收到确认请求，准备弹窗:', confirm.confirmationId)
+                        setConfirmState({
+                            confirmationId: confirm.confirmationId,
+                            message: confirm.message,
+                        })
+                    } catch { /* ignore parse error */
+                    }
+                    eventName = ''
+                    return
+                }
+
+                // 思考过程（reasoning）累积；默认文本（chunk）拼进正文。
+                // 更新的是我们前面插入的那条空 assistant 消息 → 界面重新渲染
+                if (eventName === 'reasoning') {
+                    reasoningRef.current += eventData
+                } else if (eventName === '' || eventName === 'chunk') {
+                    assistantContent += eventData
+                }
+                eventName = ''
+
+                setMessages(prev => {
+                    const updated = [...prev]
+                    updated[updated.length - 1] = {
+                        role: 'assistant',
+                        content: assistantContent,
+                        reasoning: reasoningRef.current,
+                        toolCalls: toolCallsRef.current,
+                        toolResults: toolResultsRef.current,
+                    }
+                    return updated
+                })
+            }
 
             console.log('=== SSE 流已连接，开始接收后端数据 ===')
 
@@ -166,90 +423,23 @@ function App() {
                 const lines = buffer.split('\n')
                 buffer = lines.pop() || ''
 
-                for (const line of lines) {
-                    const trimmed = line.trim()
-                    if (!trimmed) continue
-
-                    // 1. 收到事件名行 (event: chunk / confirmation_required 等)
-                    if (trimmed.startsWith('event:')) {
-                        eventName = trimmed.substring(6).trim()
-                        console.log(`收到事件类型: ${eventName}`)
+                for (const rawLine of lines) {
+                    // 兼容 \r\n 行尾
+                    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
+                    if (line === '') {
+                        dispatch()   // 空行 = 一个事件帧结束
                         continue
                     }
-
-                    // 2. 收到数据行 (data: ...)
-                    if (!trimmed.startsWith('data:')) continue
-
-                    const eventData = trimmed.substring(5).trimStart()
-
-                    // 处理结束标记
-                    if (eventData === '[DONE]') {
-                        console.log('收到 [DONE]，本轮对话结束')
-                        eventName = ''
+                    if (line.startsWith('event:')) {
+                        eventName = line.slice(6).trim()
                         continue
                     }
-
-                    // 3. 工具调用事件（画 Timeline）
-                    if (eventName === 'tool_call') {
-                        try {
-                            const tc = JSON.parse(eventData) as ToolCall
-                            toolCallsRef.current = [...toolCallsRef.current, tc]
-                            console.log('收到工具调用:', tc.name)
-                        } catch { /* ignore parse error */
-                        }
-                        eventName = ''
-                        continue
+                    if (line.startsWith('data:')) {
+                        dataLines.push(line.slice(5))   // 不 trim，空格属于内容
                     }
-
-                    // 4. 工具结果事件
-                    if (eventName === 'tool_result') {
-                        try {
-                            const tr = JSON.parse(eventData) as ToolResult
-                            toolResultsRef.current = [...toolResultsRef.current, tr]
-                            console.log('收到工具结果:', tr.name)
-                        } catch { /* ignore parse error */
-                        }
-                        eventName = ''
-                        continue
-                    }
-
-                    // 5. 敏感操作确认事件 → 弹窗
-                    if (eventName === 'confirmation_required') {
-                        try {
-                            const confirm = JSON.parse(eventData)
-                            console.log('收到确认请求，准备弹窗:', confirm.confirmationId)
-                            setConfirmState({
-                                confirmationId: confirm.confirmationId,
-                                message: confirm.message,
-                            })
-                        } catch { /* ignore parse error */
-                        }
-                        eventName = ''
-                        continue
-                    }
-
-                    // 6. 默认文本内容（chunk）
-                    // 注意：这里更新的是我们前面插入的那条空的 assistant 消息
-                    if (eventName === '' || eventName === 'chunk') {
-                        assistantContent += eventData
-                        console.log('收到文字 chunk，当前累计长度:', assistantContent.length)
-                    }
-                    eventName = ''
-
-                    // 7. 关键：更新 React state → 界面重新渲染
-                    // 每次收到新内容或工具事件，都更新最后一条 assistant 消息
-                    setMessages(prev => {
-                        const updated = [...prev]
-                        updated[updated.length - 1] = {
-                            role: 'assistant',
-                            content: assistantContent,
-                            toolCalls: toolCallsRef.current,
-                            toolResults: toolResultsRef.current,
-                        }
-                        return updated
-                    })
                 }
             }
+            dispatch()   // 冲刷流末尾未跟空行的残留帧（保险）
         } catch (error) {
             if ((error as Error).name === 'AbortError') {
                 // 用户主动中断，不显示错误
@@ -285,7 +475,7 @@ function App() {
             setLoading(false)
             abortRef.current = null
         }
-    }, [input, loading, toolMode])
+    }, [accessToken, input, loading, toolMode])
 
     // ========================================================================
     // 中断
@@ -325,7 +515,7 @@ function App() {
         try {
             const response = await fetch(`${API_BASE}/api/chat/execute-confirmed`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: authHeaders(),
                 body: JSON.stringify({confirmationId}),
             })
 
@@ -364,7 +554,7 @@ function App() {
         try {
             const response = await fetch(`${API_BASE}/api/chat/cancel-confirmation`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: authHeaders(),
                 body: JSON.stringify({confirmationId}),
             })
 
@@ -398,7 +588,10 @@ function App() {
 
         const oldId = conversationIdRef.current
         try {
-            await fetch(`${API_BASE}/api/conversations/${oldId}`, {method: 'DELETE'})
+            await fetch(`${API_BASE}/api/conversations/${oldId}`, {
+                method: 'DELETE',
+                headers: authHeaders(),
+            })
         } catch {
             // 删库失败仍开本地新会话，避免卡在旧桌号
         }
@@ -426,6 +619,22 @@ function App() {
     // 渲染
     // ========================================================================
 
+    if (authLoading) {
+        return <div className="app">正在登录...</div>
+    }
+
+    if (!accessToken) {
+        return (
+            <div className="app auth-page">
+                <div className="auth-panel">
+                    <h1>AI Assistant</h1>
+                    <button type="button" onClick={() => void startLogin()}>登录</button>
+                    {authError && <p role="alert">{authError}</p>}
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="app">
             {/* Header */}
@@ -433,16 +642,24 @@ function App() {
                 <div className="header-logo">A</div>
                 <div className="header-info">
                     <h1>AI Assistant</h1>
-                    <span>LongCat-2.0 · {toolMode ? '工具模式' : '普通模式'}</span>
+                    <span>glm-5.3-flash · {toolMode ? '工具模式' : '普通模式'}</span>
                 </div>
-                <button
-                    type="button"
-                    className="new-chat-btn"
+                    <button
+                        type="button"
+                        className="new-chat-btn"
                     onClick={handleNewConversation}
                     title="清空当前会话并开始新对话"
-                >
-                    新对话
-                </button>
+                    >
+                        新对话
+                    </button>
+                    <button
+                        type="button"
+                        className="new-chat-btn logout-btn"
+                        onClick={logout}
+                        title="退出当前用户"
+                    >
+                        退出
+                    </button>
                 <label className="tool-toggle">
                     <input
                         type="checkbox"
@@ -513,6 +730,26 @@ function App() {
                                         </div>
                                     )}
 
+                                    {/* 正在回复但还没收到任何文本（思考型模型空档期/等首个 token）→ 占位气泡 */}
+                                    {!msg.content && loading && i === messages.length - 1 && msg.role === 'assistant' && !msg.isError && (
+                                        <div className="content loading">
+                                            {toolMode ? '调用工具中' : '思考中'}
+                                            <div className="loading-dots">
+                                                <span></span>
+                                                <span></span>
+                                                <span></span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* 思考过程（可折叠）— 数据来自智谱 reasoning_content（SSE reasoning 事件累积） */}
+                                    {msg.reasoning && !msg.isError && (
+                                        <details className="reasoning-block">
+                                            <summary>🤔 思考过程</summary>
+                                            <div className="reasoning-content">{msg.reasoning}</div>
+                                        </details>
+                                    )}
+
                                     {/* 重试按钮 */}
                                     {msg.isError && !loading && (
                                         <div className="retry-area">
@@ -575,7 +812,7 @@ function App() {
                         )}
                     </div>
                     <div className="footer-hint">
-                        {toolMode ? '🔧 工具模式 · AI 可调用本地工具' : 'LongCat-2.0 · 按 Enter 发送'}
+                        {toolMode ? '🔧 工具模式 · AI 可调用本地工具' : 'glm-5.3-flash · 按 Enter 发送'}
                     </div>
                 </div>
             </div>

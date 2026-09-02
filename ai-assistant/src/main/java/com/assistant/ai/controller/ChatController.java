@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -47,11 +48,16 @@ public class ChatController {
     @PostMapping(value = "/chat/tool-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatToolStream(@RequestBody ChatRequest request, Authentication authentication) {
         SseEmitter emitter = new SseEmitter(300_000L); // 工具调用可能需要更久
+        String accessToken = ((JwtAuthenticationToken) authentication)
+                .getToken()
+                .getTokenValue();
+
         AgentAuthContext authContext = new AgentAuthContext(
                 authentication.getName(),
                 authentication.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
-                        .collect(Collectors.toUnmodifiableSet())
+                        .collect(Collectors.toUnmodifiableSet()),
+                accessToken
         );
         chatService.chatStreamWithTools(request, emitter, authContext);
         return emitter;

@@ -72,7 +72,7 @@ pnpm dev
 - 后端：Spring Boot 3.5 / Java 17 / Spring AI / MyBatis / MySQL  
 - MCP：Java SDK（Streamable HTTP）  
 - 前端：React 19 / TypeScript / Vite / pnpm  
-- LLM：LongCat（OpenAI 兼容）
+- LLM：智谱 GLM（`glm-5.3-flash`，官方 Spring AI starter，支持思考过程显示）
 
 ---
 

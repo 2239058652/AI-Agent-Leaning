@@ -3,7 +3,8 @@ POST http://localhost:3170/oauth2/token
 Authorization: Basic YWktYXNzaXN0YW50OmFpLWFzc2lzdGFudC1zZWNyZXQ=
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials&scope=mcp.weather
+grant_type = client_credentials &
+scope = mcp.weather
 
 > {%
     client.global.set("access_token", response.body.access_token);
@@ -34,7 +35,7 @@ POST http://localhost:3170/oauth2/token
 Authorization: Basic YWktYXNzaXN0YW50OmFpLWFzc2lzdGFudC1zZWNyZXQ=
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials
+grant_type = client_credentials
 
 > {%
     client.global.set("no_scope_token", response.body.access_token);
@@ -58,4 +59,33 @@ Accept: application/json, text/event-stream
       "version": "1.0.0"
     }
   }
+}
+
+###
+POST http://localhost:3170/oauth2/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type = authorization_code &
+client_id = frontend &
+redirect_uri = http%3A%2F%2Flocalhost%3A3100%2Fcallback &
+code = DWbkrtN9vuMcqhcOMt7QbvB_Rj3tVAdUBSyrPSGih5T7HHiO7SrHRwe_lrYAmzACLdlf66jJJKjMqBQK561w9lA1nWF5DLvh3O_ngz5SYjF23BOPTa6BMi_PaJKbMP0b &
+code_verifier = 4Iht41E15JPctLeznCZjBpDddFJ7YpblGEaQ6eGj5Fc
+
+###
+POST http://localhost:3180/api/chat
+Authorization: Bearer eyJraWQiOiI2MjhkOWIyOS1mN2Q1LTRjNTUtODc0ZS0yODM3OWZhZmE0ZWUiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMSIsImF1ZCI6WyJhaS1hc3Npc3RhbnQiLCJtY3Atc2VydmVyIl0sIm5iZiI6MTc4NzczMTAyOSwic2NvcGUiOlsib3BlbmlkIiwicHJvZmlsZSIsIm1jcC53ZWF0aGVyIl0sInJvbGVzIjpbIlVTRVIiXSwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDozMTcwIiwiZXhwIjoxNzg3NzMxMzI5LCJpYXQiOjE3ODc3MzEwMjksImp0aSI6ImI1NTQ5Yzk2LTVhNzItNDFjMy05YTFlLWRjMDY5ZTU5YzliMSJ9.A3_cPjWHYIezSGnIwxb5AvZGrKhoUhR6ucGDvmqizMHEcrpnbs_F5BRjdDWhGtdLOCHjcaU6sIquFzPlD8brKOj3jFFtahTCbOfwFFGtP4tdjt_Ki9QRuv6HtAmzJGS2hz2TuH-t1fPQQV2LhiApvA95b4GrgP7hEpklTLBDyKg8bXMxbCU2DIxaecFNgHIQjTiwNB26TDYzIqfwKLWV7hyB2_z8WqWU4-nQfDPaghcrZqOXDcs-3YnJmwocr91Yf6e3iGSOCc3_Akhw9bTfyoet4f2Rd9BCkdLunX9PFwoBoMDmajVwuLPDEEKnhrbbmCwVF35cx0fA1Xkx0iy54A
+Content-Type: application/json
+
+{
+  "message": "你好",
+  "conversationId": "jwt-test-001"
+}
+
+###
+POST http://localhost:3180/api/chat
+Content-Type: application/json
+
+{
+  "message": "你好",
+  "conversationId": "jwt-test-002"
 }

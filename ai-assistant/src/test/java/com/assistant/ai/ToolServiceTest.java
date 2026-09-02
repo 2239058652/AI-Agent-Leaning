@@ -25,13 +25,13 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ToolServiceTest {
 
-    private ToolService toolService;
     private final AgentAuthContext userContext =
-            new AgentAuthContext("user1", Set.of("ROLE_USER"));
+            new AgentAuthContext("user1", Set.of("ROLE_USER"), "test-token");
     private final AgentAuthContext otherUserContext =
-            new AgentAuthContext("user2", Set.of("ROLE_USER"));
+            new AgentAuthContext("user2", Set.of("ROLE_USER"), "test-token");
     private final AgentAuthContext adminContext =
-            new AgentAuthContext("admin", Set.of("ROLE_ADMIN"));
+            new AgentAuthContext("admin", Set.of("ROLE_ADMIN"), "test-token");
+    private ToolService toolService;
 
     @BeforeEach
     void setUp() {

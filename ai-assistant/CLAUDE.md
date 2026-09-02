@@ -76,5 +76,5 @@ mvn spring-boot:run
 
 ## 外部依赖
 
-- LongCat API（OpenAI 兼容）
-- Spring AI 1.0.0 GA
+- 智谱 GLM API（官方 `spring-ai-starter-model-zhipuai`，模型 `glm-5.3-flash`，含 `reasoning_content` 思考内容）
+- Spring AI 1.1.8 GA
