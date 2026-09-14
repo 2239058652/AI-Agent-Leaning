@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
-import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper;
+import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.spec.McpSchema;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * MCP 客户端测试 — 通过 HTTP 连接 MCP Server
  * <p>
+ *
  * @SpringBootTest 启动完整的 Spring Boot 应用（包括嵌入式 Tomcat），
  * 测试类通过 HTTP 连接 Server，和真实场景一样。
  */

@@ -30,6 +30,16 @@ import java.util.Map;
 @Configuration
 public class McpConfig {
 
+    static CallToolResult denyWeatherIfNotAdmin(List<String> roles) {
+        if (!roles.contains("ROLE_ADMIN")) {
+            return CallToolResult.builder()
+                    .isError(true)
+                    .addTextContent("权限不足：get_weather 需要 ADMIN 角色")
+                    .build();
+        }
+        return null;
+    }
+
     @Bean
     public HttpServletStreamableServerTransportProvider mcpTransportProvider() {
         var jsonMapper = new JacksonMcpJsonMapper(new ObjectMapper());
@@ -69,11 +79,9 @@ public class McpConfig {
                             ? list.stream().map(String::valueOf).toList()
                             : List.of();
 
-                    if (!roles.contains("ROLE_ADMIN")) {
-                        return CallToolResult.builder()
-                                .isError(true)
-                                .addTextContent("权限不足：get_weather 需要 ADMIN 角色")
-                                .build();
+                    CallToolResult denied = denyWeatherIfNotAdmin(roles);
+                    if (denied != null) {
+                        return denied;
                     }
 
                     String argsJson = toJson(objectMapper, request.arguments());
