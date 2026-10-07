@@ -1,6 +1,7 @@
 package com.assistant.ai;
 
 import com.assistant.ai.config.LlmProperties;
+import com.assistant.ai.knowledge.KnowledgeQuery;
 import com.assistant.ai.service.ChatService;
 import com.assistant.ai.tool.PendingConfirmationStore;
 import com.assistant.ai.tool.ToolCallbackProvider;
@@ -27,7 +28,8 @@ class ConversationIsolationTest {
                 Mockito.mock(ChatClient.Builder.class),
                 Mockito.mock(ToolCallbackProvider.class),
                 chatMemory,
-                new PendingConfirmationStore()
+                new PendingConfirmationStore(),
+                Mockito.mock(KnowledgeQuery.class)
         );
     }
 

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.assistant.ai.mapper.KnowledgeChunkMapper">
+
+    <insert id="insert">
+        INSERT INTO knowledge_chunk
+        (document_id, chunk_index, content, start_offset, end_offset, embedding_json)
+        VALUES (#{documentId}, #{chunkIndex}, #{content}, #{startOffset}, #{endOffset}, #{embeddingJson})
+    </insert>
+
+    <select id="findByOwner" resultType="com.assistant.ai.mapper.KnowledgeChunkRow">
+        SELECT c.id,
+               c.document_id,
+               c.chunk_index,
+               c.content,
+               c.start_offset,
+               c.end_offset,
+               c.embedding_json
+        FROM knowledge_chunk c
+                 JOIN knowledge_document d ON d.id = c.document_id
+        WHERE d.owner_user_id = #{ownerUserId}
+        ORDER BY c.document_id, c.chunk_index
+    </select>
+
+</mapper>

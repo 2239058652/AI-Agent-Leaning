@@ -3,6 +3,8 @@ package com.assistant.ai.service;
 import com.assistant.ai.config.LlmProperties;
 import com.assistant.ai.dto.ChatRequest;
 import com.assistant.ai.dto.ChatResponse;
+import com.assistant.ai.knowledge.KnowledgeQuery;
+import com.assistant.ai.knowledge.RagPromptAssembler.RagPrompt;
 import com.assistant.ai.security.AgentAuthContext;
 import com.assistant.ai.tool.PendingConfirmationStore;
 import com.assistant.ai.tool.ToolCallbackProvider;
@@ -46,6 +48,7 @@ public class ChatService {
     private final ChatMemory chatMemory;
     private final ExecutorService executor = Executors.newFixedThreadPool(10);
     private final PendingConfirmationStore pendingConfirmationStore;
+    private final KnowledgeQuery knowledgeQuery;
 
     // ========================================================================
     // 执行已确认的敏感操作
@@ -91,10 +94,9 @@ public class ChatService {
 
             ChatClient chatClient = chatClientBuilder.build();
             var promptSpec = chatClient.prompt();
-            if (request.getSystemPrompt() != null && !request.getSystemPrompt().isBlank()) {
-                promptSpec = promptSpec.system(request.getSystemPrompt());
-            }
-            promptSpec = promptSpec.user(request.getMessage());
+            RagPrompt ragPrompt = knowledgeQuery.ask(userId, request.getMessage(), 3);
+            promptSpec = promptSpec.system(ragPrompt.systemRules());
+            promptSpec = promptSpec.user(ragPrompt.userMessage());
             // 1.1.8：会话 ID 改从请求上下文传入（键见 ChatMemory.CONVERSATION_ID），
             // Advisor 本身不再持有会话 ID；param() 把值放进 Advisor 可见的上下文
             promptSpec = promptSpec.advisors(spec -> spec
@@ -126,10 +128,9 @@ public class ChatService {
 
                 ChatClient chatClient = chatClientBuilder.build();
                 var promptSpec = chatClient.prompt();
-                if (request.getSystemPrompt() != null && !request.getSystemPrompt().isBlank()) {
-                    promptSpec = promptSpec.system(request.getSystemPrompt());
-                }
-                promptSpec = promptSpec.user(request.getMessage());
+                RagPrompt ragPrompt = knowledgeQuery.ask(userId, request.getMessage(), 3);
+                promptSpec = promptSpec.system(ragPrompt.systemRules());
+                promptSpec = promptSpec.user(ragPrompt.userMessage());
                 // 1.1.8：会话 ID 改从请求上下文传入（键见 ChatMemory.CONVERSATION_ID）
                 promptSpec = promptSpec.advisors(spec -> spec
                         .advisors(memoryAdvisor())
