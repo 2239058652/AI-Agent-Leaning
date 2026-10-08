@@ -17,13 +17,20 @@ spring:
       api-key: ${API_MODEL_KEY}
       chat:
         options:
-          model: glm-5.3-flash
+          model: glm-4.7
 
   security:
     oauth2:
       resourceserver:
         jwt:
           issuer-uri: http://localhost:3170
+
+# 日志落盘：OpenTelemetry 的 LoggingSpanExporter 走 java.util.logging，
+# Spring Boot 会自动装上 JUL→SLF4J 桥，所以 span 会随应用日志写进这个文件。
+# 目的是能离线核对 trace（execution / model / tool 是否共享同一个 traceId）。
+logging:
+  file:
+    name: logs/ai-assistant.log
 
 # MyBatis 配置
 mybatis:
@@ -36,7 +43,7 @@ mybatis:
 llm:
   api-key: ${API_MODEL_KEY}
   base-url: https://open.bigmodel.cn/api/paas
-  model: glm-5.3-flash
+  model: glm-4.7
   timeout: 60
 
 # MCP 客户端配置

@@ -16,10 +16,15 @@ public class PendingConfirmationStore {
      * 服务端保存可信的原始操作，并只返回随机 ID
      */
     public String create(String toolName, String argsJson, String conversationId, AgentAuthContext authContext) {
+        return create(toolName, argsJson, conversationId, authContext, null);
+    }
+
+    public String create(String toolName, String argsJson, String conversationId,
+                         AgentAuthContext authContext, String executionId) {
         String confirmationId = UUID.randomUUID().toString();
         pending.put(
                 confirmationId,
-                new PendingConfirmation(toolName, argsJson, conversationId, authContext)
+                new PendingConfirmation(toolName, argsJson, conversationId, authContext, executionId)
         );
         return confirmationId;
     }
@@ -49,7 +54,8 @@ public class PendingConfirmationStore {
             String toolName,
             String argsJson,
             String conversationId,
-            AgentAuthContext authContext
+            AgentAuthContext authContext,
+            String executionId
     ) {
     }
 }

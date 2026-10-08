@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.assistant.ai.mapper.AuditEventMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO agent_audit_event
+            (execution_id, user_id, conversation_id, event_type, tool_name,
+             args_digest, sensitive_flag, success, reason, span_type, span_index)
+        VALUES
+            (#{executionId}, #{userId}, #{conversationId}, #{eventType}, #{toolName},
+             #{argsDigest}, #{sensitive}, #{success}, #{reason}, #{spanType}, #{spanIndex})
+    </insert>
+
+    <select id="findByExecutionId" resultType="com.assistant.ai.audit.AuditEvent">
+        SELECT id, execution_id, user_id, conversation_id, event_type, tool_name,
+               args_digest, sensitive_flag AS sensitive, success, reason, span_type, span_index, created_at
+        FROM agent_audit_event
+        WHERE execution_id = #{executionId}
+          AND user_id = #{userId}
+        ORDER BY id ASC
+    </select>
+
+    <select id="findSensitiveByUserId" resultType="com.assistant.ai.audit.AuditEvent">
+        SELECT id, execution_id, user_id, conversation_id, event_type, tool_name,
+               args_digest, sensitive_flag AS sensitive, success, reason, span_type, span_index, created_at
+        FROM agent_audit_event
+        WHERE user_id = #{userId}
+          AND sensitive_flag = 1
+        ORDER BY id ASC
+    </select>
+
+</mapper>

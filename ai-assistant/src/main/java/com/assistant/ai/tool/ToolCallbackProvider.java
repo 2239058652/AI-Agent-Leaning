@@ -1,10 +1,16 @@
 package com.assistant.ai.tool;
 
+import com.assistant.ai.audit.AuditContext;
+import com.assistant.ai.audit.AuditEvent;
+import com.assistant.ai.audit.AuditExecutionHolder;
+import com.assistant.ai.audit.AuditRecorder;
+import com.assistant.ai.audit.AuditTracer;
 import com.assistant.ai.security.AgentAuthContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -23,7 +29,6 @@ import java.util.function.BiFunction;
  * ToolService 负责工具执行（安全检查 → 参数校验 → 敏感操作确认）
  * 这个类是桥梁：让 Spring AI 调工具时走 ToolService
  */
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ToolCallbackProvider {
@@ -32,6 +37,8 @@ public class ToolCallbackProvider {
     private final ToolService toolService;
     private final ObjectMapper objectMapper;
     private final PendingConfirmationStore pendingConfirmationStore;
+    private final AuditRecorder auditRecorder;
+    private final AuditTracer auditTracer;
 
     /**
      * 获取所有工具的 ToolCallback 列表
@@ -53,21 +60,73 @@ public class ToolCallbackProvider {
         // 工具执行逻辑：接收参数 Map，转成 JSON 字符串后委托给 ToolService
         BiFunction<Map<String, Object>, ToolContext, String> toolFunction = (args, ctx) -> {
             String argsJson;
+            String executionId = (String) ctx.getContext().get("executionId");
+            String conversationId = (String) ctx.getContext().get("conversationId");
             AgentAuthContext authContext =
                     (AgentAuthContext) ctx.getContext().get("authContext");
+            AuditContext execution = AuditExecutionHolder.get(executionId);
+            String spanType = toolDef.getSource() == ToolDefinition.ToolSource.MCP ? "mcp" : "tool";
+            // 一个工具调用只有一个 span：编号在这里分配一次，本次调用的所有事件共用
+            Integer spanIndex = executionId == null
+                    ? null : AuditContext.allocateSpanIndex(executionId, spanType);
+            Span span = auditTracer.start(spanType, execution, toolDef.getName());
             try {
                 // Spring AI 传过来的是 Map，需要转回 JSON 字符串给 ToolService
                 argsJson = objectMapper.writeValueAsString(args);
             } catch (Exception e) {
+                auditRecorder.record(AuditEvent.builder()
+                        .executionId(executionId)
+                        .userId(authContext == null ? null : authContext.userId())
+                        .eventType("tool_failed")
+                        .spanType(spanType)
+                        .spanIndex(spanIndex)
+                        .toolName(toolDef.getName())
+                        .sensitive(toolDef.isSensitive())
+                        .success(false)
+                        .reason("参数序列化失败")
+                        .build());
+                auditTracer.fail(span, "参数序列化失败");
                 return "参数序列化失败: " + e.getMessage();
             }
-            log.info("[Spring AI 工具代理] 调用 {}({})", toolDef.getName(), argsJson);
-            ToolResult result = toolService.execute(toolDef.getName(), argsJson, authContext);
+            auditRecorder.record(AuditEvent.builder()
+                    .executionId(executionId)
+                    .userId(authContext == null ? null : authContext.userId())
+                    .conversationId(conversationId)
+                    .eventType("tool_called")
+                    .spanType(spanType)
+                    .spanIndex(spanIndex)
+                    .toolName(toolDef.getName())
+                    .argsDigest(argsJson)
+                    .sensitive(toolDef.isSensitive())
+                    .build());
+            ToolResult result;
+            try (Scope ignored = auditTracer.open(span)) {
+                result = toolService.execute(toolDef.getName(), argsJson, authContext);
+            }
+            boolean failed = !result.isNeedsConfirmation()
+                    && result.getResult() != null
+                    && result.getResult().startsWith("错误");
+            auditRecorder.record(AuditEvent.builder()
+                    .executionId(executionId)
+                    .userId(authContext == null ? null : authContext.userId())
+                    .conversationId(conversationId)
+                    .eventType(result.isNeedsConfirmation() ? "confirmation_required"
+                            : failed ? "tool_failed" : "tool_succeeded")
+                    .spanType(spanType)
+                    .spanIndex(spanIndex)
+                    .toolName(toolDef.getName())
+                    .sensitive(toolDef.isSensitive() || result.isNeedsConfirmation())
+                    .success(result.isNeedsConfirmation() ? null : !failed)
+                    .reason(failed ? result.getResult() : null)
+                    .build());
+            if (failed) {
+                auditTracer.fail(span, result.getResult());
+            } else {
+                auditTracer.succeed(span);
+            }
 
             if (result.isNeedsConfirmation()) {
                 SseEmitter emitter = (SseEmitter) ctx.getContext().get("emitter");
-
-                String conversationId = (String) ctx.getContext().get("conversationId");
 
                 if (emitter == null || conversationId == null || conversationId.isBlank()) {
                     return "此操作为敏感操作，当前调用方式不支持确认流程，已拒绝执行。";
@@ -77,7 +136,8 @@ public class ToolCallbackProvider {
                         result.getToolName(),
                         result.getArgsJson(),
                         conversationId,
-                        authContext
+                        authContext,
+                        executionId
                 );
 
                 try {

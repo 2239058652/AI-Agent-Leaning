@@ -1,5 +1,10 @@
 package com.assistant.ai.service;
 
+import com.assistant.ai.audit.AuditContext;
+import com.assistant.ai.audit.AuditEvent;
+import com.assistant.ai.audit.AuditExecutionHolder;
+import com.assistant.ai.audit.AuditRecorder;
+import com.assistant.ai.audit.AuditTracer;
 import com.assistant.ai.config.LlmProperties;
 import com.assistant.ai.dto.ChatRequest;
 import com.assistant.ai.dto.ChatResponse;
@@ -13,6 +18,7 @@ import com.assistant.ai.tool.ToolService;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import io.opentelemetry.api.trace.Span;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -21,6 +27,7 @@ import org.springframework.ai.zhipuai.ZhiPuAiAssistantMessage;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -49,6 +56,8 @@ public class ChatService {
     private final ExecutorService executor = Executors.newFixedThreadPool(10);
     private final PendingConfirmationStore pendingConfirmationStore;
     private final KnowledgeQuery knowledgeQuery;
+    private final AuditRecorder auditRecorder;
+    private final AuditTracer auditTracer;
 
     // ========================================================================
     // 执行已确认的敏感操作
@@ -71,6 +80,31 @@ public class ChatService {
                 pending.argsJson(),
                 pending.authContext()
         );
+        boolean succeeded = result.getResult() == null || !result.getResult().startsWith("错误");
+        String executionId = pending.executionId() == null || pending.executionId().isBlank()
+                ? confirmationId : pending.executionId();
+        AuditContext execution = AuditExecutionHolder.get(executionId);
+        Span span = auditTracer.start("sensitive_executed", execution, pending.toolName());
+        // 确认操作是新的一次工具执行：执行已结束也按同一个 executionId 继续编号
+        Integer spanIndex = AuditContext.allocateSpanIndex(executionId, "tool");
+        auditRecorder.record(AuditEvent.builder()
+                .executionId(executionId)
+                .userId(userId)
+                .conversationId(pending.conversationId())
+                .eventType("sensitive_executed")
+                .spanType("tool")
+                .spanIndex(spanIndex)
+                .toolName(pending.toolName())
+                .argsDigest(pending.argsJson())
+                .sensitive(true)
+                .success(succeeded)
+                .reason(succeeded ? null : result.getResult())
+                .build());
+        if (succeeded) {
+            auditTracer.succeed(span);
+        } else {
+            auditTracer.fail(span, result.getResult());
+        }
 
         try {
             chatMemory.add(
@@ -171,21 +205,34 @@ public class ChatService {
 
     public void chatStreamWithTools(ChatRequest request, SseEmitter emitter, AgentAuthContext authContext) {
         executor.execute(() -> {
+            String executionId = UUID.randomUUID().toString();
+            String conversationId = resolveConversationId(request.getConversationId(), authContext.userId());
+            Span executionSpan = auditTracer.startExecution(executionId, authContext.userId(), conversationId);
+            AuditContext execution = new AuditContext(
+                    executionId, authContext.userId(), conversationId, null, executionSpan);
+            AuditExecutionHolder.put(execution);
+            // 一次执行只有一个 execution span：编号在这里分配一次，起止事件共用
+            Integer executionIndex = execution.nextSpanIndex("execution");
             try {
-                log.info("带工具流式聊天(Spring AI): {}", request.getMessage());
+                auditRecorder.record(AuditEvent.builder()
+                        .executionId(executionId)
+                        .userId(authContext.userId())
+                        .conversationId(conversationId)
+                        .eventType("execution_started")
+                        .spanType("execution")
+                        .spanIndex(executionIndex)
+                        .build());
 
                 var toolCallbacks = toolCallbackProvider.getToolCallbacks();
                 log.info("注册 {} 个工具给 Spring AI", toolCallbacks.size());
 
                 ChatClient chatClient = chatClientBuilder.build();
-                var promptSpec = chatClient.prompt();
-                if (request.getSystemPrompt() != null && !request.getSystemPrompt().isBlank()) {
-                    promptSpec = promptSpec.system(request.getSystemPrompt());
-                }
-                promptSpec = promptSpec.user(request.getMessage());
+                RagPrompt ragPrompt = knowledgeQuery.ask(authContext.userId(), request.getMessage(), 3);
+                var promptSpec = chatClient.prompt()
+                        .system(ragPrompt.systemRules())
+                        .user(ragPrompt.userMessage());
 
-                // 会话 ID 只解析一次：Advisor 上下文 与 工具上下文（确认弹窗）共用
-                String conversationId = resolveConversationId(request.getConversationId(), authContext.userId());
+                // 会话 ID 已在方法开头解析：Advisor 上下文 与 工具上下文（确认弹窗）共用
 
                 // 通过 ToolContext 把 emitter 传给工具回调（带外数据通道）
                 // Spring AI 不会把 toolContext 发给模型，只在本地工具执行时可见
@@ -194,7 +241,8 @@ public class ChatService {
                         .toolContext(java.util.Map.of(
                                         "emitter", emitter,
                                         "conversationId", conversationId,
-                                        "authContext", authContext
+                                        "authContext", authContext,
+                                        "executionId", executionId
                                 )
                         )
                         // 1.1.8：会话 ID 改从请求上下文传入（键见 ChatMemory.CONVERSATION_ID）
@@ -203,27 +251,65 @@ public class ChatService {
                                 .param(ChatMemory.CONVERSATION_ID, conversationId))
                         .stream()
                         // 同上：chatResponse() 才能同时拿到文本与思考内容
-                        .chatResponse();
+                        .chatResponse()
+                        .doOnSubscribe(subscription -> sendEvent(emitter, "execution", executionId));
 
                 flux.subscribe(
                         response -> forwardChatResponseEvents(response, emitter),
                         error -> {
+                            auditRecorder.record(AuditEvent.builder()
+                                    .executionId(executionId)
+                                    .userId(authContext.userId())
+                                    .conversationId(conversationId)
+                                    .eventType("execution_failed")
+                                    .spanType("execution")
+                                    .spanIndex(executionIndex)
+                                    .success(false)
+                                    .reason(error.getClass().getSimpleName())
+                                    .build());
                             log.error("带工具流式聊天(Spring AI)异常", error);
                             emitter.completeWithError(error);
+                            finishExecution(executionSpan, executionId, false, error.getClass().getSimpleName());
                         },
                         () -> {
+                            auditRecorder.record(AuditEvent.builder()
+                                    .executionId(executionId)
+                                    .userId(authContext.userId())
+                                    .conversationId(conversationId)
+                                    .eventType("execution_completed")
+                                    .spanType("execution")
+                                    .spanIndex(executionIndex)
+                                    .success(true)
+                                    .build());
+                            boolean sent = false;
                             try {
                                 emitter.send(SseEmitter.event().name("done").data("[DONE]"));
                                 emitter.complete();
+                                sent = true;
                             } catch (Exception e) {
                                 emitter.completeWithError(e);
+                                finishExecution(executionSpan, executionId, false, e.getClass().getSimpleName());
+                            }
+                            if (sent) {
+                                finishExecution(executionSpan, executionId, true, null);
                             }
                         }
                 );
 
             } catch (Exception e) {
+                auditRecorder.record(AuditEvent.builder()
+                        .executionId(executionId)
+                        .userId(authContext.userId())
+                        .conversationId(conversationId)
+                        .eventType("execution_failed")
+                        .spanType("execution")
+                        .spanIndex(executionIndex)
+                        .success(false)
+                        .reason(e.getClass().getSimpleName())
+                        .build());
                 log.error("带工具流式聊天(Spring AI)启动异常", e);
                 emitter.completeWithError(e);
+                finishExecution(executionSpan, executionId, false, e.getClass().getSimpleName());
             }
         });
     }
@@ -250,14 +336,30 @@ public class ChatService {
         String text = output.getText();
         String reasoning = (output instanceof ZhiPuAiAssistantMessage zm) ? zm.getReasoningContent() : null;
         try {
-            if (text != null && !text.isEmpty()) {
-                emitter.send(SseEmitter.event().name("chunk").data(text));
-            }
-            if (reasoning != null && !reasoning.isEmpty()) {
-                emitter.send(SseEmitter.event().name("reasoning").data(reasoning));
-            }
+            sendEvent(emitter, "chunk", text);
+            sendEvent(emitter, "reasoning", reasoning);
         } catch (Exception e) {
             log.error("发送 SSE 事件失败", e);
+        }
+    }
+
+    private void finishExecution(Span executionSpan, String executionId, boolean success, String reason) {
+        if (success) {
+            auditTracer.succeed(executionSpan);
+        } else {
+            auditTracer.fail(executionSpan, reason);
+        }
+        AuditExecutionHolder.remove(executionId);
+    }
+
+    private void sendEvent(SseEmitter emitter, String name, String data) {
+        if (data == null || data.isEmpty()) {
+            return;
+        }
+        try {
+            emitter.send(SseEmitter.event().name(name).data(data));
+        } catch (Exception e) {
+            log.error("发送 SSE 事件失败: {}", name, e);
         }
     }
 

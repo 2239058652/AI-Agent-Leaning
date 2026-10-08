@@ -1,5 +1,7 @@
 package com.assistant.ai.controller;
 
+import com.assistant.ai.audit.AuditEvent;
+import com.assistant.ai.audit.AuditRecorder;
 import com.assistant.ai.dto.ChatRequest;
 import com.assistant.ai.dto.ChatResponse;
 import com.assistant.ai.security.AgentAuthContext;
@@ -14,6 +16,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
@@ -22,6 +25,7 @@ import java.util.stream.Collectors;
 public class ChatController {
 
     private final ChatService chatService;
+    private final AuditRecorder auditRecorder;
 
     /**
      * 非流式聊天 — 一次性返回完整回复
@@ -88,6 +92,19 @@ public class ChatController {
     /**
      * 取消
      */
+    /** 一次 Agent 执行里的模型调用、工具调用和结果，按写入顺序 */
+    @GetMapping("/audit/executions/{executionId}")
+    public List<AuditEvent> execution(@PathVariable("executionId") String executionId,
+                                      Authentication authentication) {
+        return auditRecorder.execution(executionId, authentication.getName());
+    }
+
+    /** 当前用户执行过的敏感操作 */
+    @GetMapping("/audit/sensitive")
+    public List<AuditEvent> sensitive(Authentication authentication) {
+        return auditRecorder.sensitiveOperations(authentication.getName());
+    }
+
     @PostMapping("/chat/cancel-confirmation")
     public void cancelConfirmation(@Valid @RequestBody ConfirmRequest request, Authentication authentication) {
         chatService.cancelConfirmation(request.confirmationId(), authentication.getName());
